@@ -1,0 +1,73 @@
+name: zuno
+description: "ZUNO — video / depth / HTML / timed dynamic wallpapers for Android."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ---- ZIP 导入（.zuno 包本质是 ZIP 容器）----
+  # archive 3.x 的 ZipDecoder/ZipEncoder API 稳定；解压在 Isolate 中执行避免阻塞 UI。
+  archive: ^3.6.1
+  # checksum（manifest.json 的 sha256-… 字段）计算。
+  crypto: ^3.0.3
+
+  # ---- 文件与应用数据 ----
+  path_provider: ^2.1.4
+  file_picker: ^13.0.0
+
+  # ---- 壁纸库索引（manifest 校验通过后的持久化），规格要求 SQLite 或 Hive ----
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # ---- 深度视差“预览”专用（真机壁纸渲染走原生 OpenGL ES，不经过 Flutter）----
+  sensors_plus: ^7.0.0
+
+  # ---- 视频壁纸“预览”专用（真机壁纸由原生 ExoPlayer 渲染到 Surface，
+  #      不经过 Flutter；这里只是库管理页里的小窗口预览）----
+  video_player: ^2.9.2
+
+  # ---- 应用内 UI 设置 ----
+  permission_handler: ^13.0.0
+  # iOS 26/27 液态玻璃组件库（真实 fragment shader：模糊/折射/高光/色散）。
+  # 自带引擎实现（零第三方依赖），取代此前的 liquid_glass_renderer。
+  # 1.17.4/1.17.5 修复了 iOS 27 深色模式镜头轮廓与内部清晰度，勿降级。
+  liquid_glass_widgets: ^1.17.5
+  # liquid_glass_widgets 的 GlassToast 等组件默认图标使用 CupertinoIcons 字形，
+  # 字体文件在本包中；缺失时所有 toast 默认图标渲染为占位符 ⍰。
+  cupertino_icons: ^1.0.8
+  # 关于页打开 QQ 群链接 / 外部浏览器。
+  url_launcher: ^6.3.0
+  hugeicons: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  # 启动图标生成：assets/icon/app_icon*.png → 各密度 mipmap + 自适应图标层。
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png
+
+# 图标生成配置。
+#
+# 源图由 `python -I tool/generate_launcher_icon.py` 从两张设计稿图层派生：
+#   app_icon.png            合成稿（旧版图标）
+#   app_icon_foreground.png 自适应前景（已按 72dp 遮罩安全区缩到 82%，自带边距）
+# 因此这里必须把插件默认的 16% inset 关掉，否则会被二次内缩。
+# 改完源图后依次运行：python -I tool/generate_launcher_icon.py → dart run flutter_launcher_icons。
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: "launcher_icon"
+  adaptive_icon_background: "assets/icon/app_icon_background.png"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  adaptive_icon_foreground_inset: 0
+  min_sdk_android: 24

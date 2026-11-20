@@ -1,0 +1,30 @@
+# 复制为 wrangler.toml（已在 .gitignore 中忽略），按自己的部署填写。
+# 真实的 database_id、自有域名、WebDAV 地址都只存在本地文件里，不进仓库。
+
+name = "zuno-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# 对外入口。*.workers.dev 在部分网络会被 DNS 投毒，走自有 zone 更稳。
+# 没有自有域名就整段删掉，用默认的 <worker>.<account>.workers.dev。
+# [[routes]]
+# pattern = "zuno-api.example.com"
+# custom_domain = true
+
+# 本地开发不需要真实 D1：wrangler 会把它映射到 .wrangler/ 下的本地 SQLite。
+# 远端库用 `npx wrangler d1 create zuno` 创建后，把返回的 database_id 填在这里。
+[[d1_databases]]
+binding = "DB"
+database_name = "zuno"
+database_id = "<D1_DATABASE_ID>"
+
+[vars]
+# 只填到 /zuno（WebDAV 中给本服务授权的根），路径段由 Worker 逐段编码。
+WEBDAV_BASE = "https://dav.example.com/zuno"
+# 免费版单请求 10ms CPU：10000 次 PBKDF2 约 2–4ms。
+# 上 Workers Paid（30s CPU）后再调到 100000。
+PBKDF2_ITERATIONS = "10000"
+# WebDAV 上行是唯一带宽瓶颈，并发超过它只会互相拖慢。
+DOWNLOAD_CONCURRENCY = "3"
+# 打开后整文件 GET 走 caches.default（key 不含 ticket，只缓存同 id 的公开字节）。
+CACHE_DOWNLOADS = "false"

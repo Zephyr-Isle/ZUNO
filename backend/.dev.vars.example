@@ -1,0 +1,7 @@
+# 复制为 .dev.vars（已在 .gitignore 中忽略），只用于 wrangler dev。
+# 生产值用 `wrangler secret put <NAME>` 写入，不要提交任何真实凭据。
+
+WEBDAV_USER=zuno-reader
+WEBDAV_PASS=change-me
+TICKET_SECRET=dev-ticket-secret-change-me
+ADMIN_SECRET=dev-admin-secret-change-me

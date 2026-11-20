@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 系统壁纸选择器里显示的元数据：缩略图 + 描述。
+     thumbnail 用位图 PNG（drawables-nodpi）而非自适应图标 XML：
+     部分 Android 12+ 选择器无法把 AdaptiveIconDrawable 解码为缩略图，
+     会静默跳过整个壁纸条目（Android 15 实测列表不显示 ZUNO 的原因）。 -->
+<wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:thumbnail="@drawable/zuno_wallpaper_thumb"
+    android:description="@string/zuno_wallpaper_desc" />

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 授权路径：导出的 .zuno 包写入 cache/exports/ 后经 ACTION_SEND 分享。 -->
+<paths>
+    <cache-path
+        name="exports"
+        path="exports/" />
+</paths>

@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.wrangler-build/
+.dev.vars
+.tmp-dav/
+
+# 真实部署配置（database_id / 自有域名 / WebDAV 主机）不进仓库
+wrangler.toml

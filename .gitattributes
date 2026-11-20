@@ -1,0 +1,32 @@
+# 仓库内统一 LF；Windows 脚本检出为 CRLF
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制：不要做行尾转换，也不要参与文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.zuno binary
+*.zip binary
+*.jar binary
+*.keystore binary
+*.jks binary
+*.so binary
+*.a binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.webm binary
+
+# 生成物：折叠 diff，不计入语言统计
+pubspec.lock linguist-generated=true
+package-lock.json linguist-generated=true
+Cargo.lock linguist-generated=true
