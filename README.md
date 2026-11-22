@@ -1,308 +1,308 @@
-# ZUNO
+<p align="center">
+  <img src="docs/images/app-icon.png" width="104" alt="ZUNO icon" />
+</p>
 
-Android 动态壁纸应用：**视频 / 深度视差 / HTML / 定时** 四种壁纸类型，`com.zuno.wallpaper`，minSdk 24，目标 API 34+。
+<h1 align="center">ZUNO</h1>
 
-设计原则：**高性能、低占用、渲染与 UI 严格分离**。Flutter 只做管理端（壁纸库、ZIP 导入、预览、参数配置）；所有壁纸渲染都发生在原生 `WallpaperService` 中，四种类型没有一种经过 Flutter 渲染链路。
+<p align="center">
+  <strong>Dynamic wallpapers for Android — video, depth parallax, HTML and timed wallpapers.</strong><br/>
+  Flutter is only the management UI; everything on your home screen is drawn by a native <code>WallpaperService</code>, completely off Flutter's rendering path.
+</p>
 
-云端（壁纸目录、下载分发）不是 App 运行必需：**浏览与下载都不需要登录**，下载只换 5 分钟一次性票据（匿名请求记 `uid=anon`）；账号、上传与删除属于管理端，客户端不提供入口。管理端是独立的 Tauri 桌面应用（[`desktop/`](desktop/README.md)），在本地压缩、直传 WebDAV 并触发同步。壁纸库地址在 App 的「设置 → 壁纸库地址」里配置（存 `zuno_config` 的 `library.base_url`，默认值编译在 `ZunoEndpoint.base`），换地址后会清空并重建目录。契约见 [`docs/backend.md`](docs/backend.md)，实现位于 `backend/`（Workers + D1 + WebDAV）。
+<p align="center">
+  <a href="https://github.com/Zephyr-Isle/ZUNO/actions/workflows/ci.yml"><img src="https://github.com/Zephyr-Isle/ZUNO/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Zephyr-Isle/ZUNO/releases/latest"><img src="https://img.shields.io/github/v/release/Zephyr-Isle/ZUNO" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
+  English · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 ---
 
-## 1. 总体架构
+## Table of contents
 
-```
-┌──────────────────────────┐        ┌───────────────────────────────┐
-│  主 App（Flutter）        │ Channel│  ZunoWallpaperService（原生）   │
-│  · 壁纸库管理（Hive 索引）  │───────▶│  Engine = 生命周期调度器        │
-│  · ZIP 导入 + manifest 校验│        │   ├ VideoWallpaperEngine      │
-│  · 预览 / 参数配置         │        │   │   ExoPlayer ─▶ Surface    │
-│  · 应用壁纸               │        │   ├ DepthWallpaperEngine      │
-└──────────────────────────┘        │   │   EGL14 + GLES20 + 传感器   │
-        │                           │   ├ HtmlWallpaperEngine       │
-        │  WorkManager 周期任务      │   │   离屏 WebView ─▶ 软件画布   │
-        ▼                           │   └ （timed 不渲染，见 §2.4）    │
-┌──────────────────────────┐        └───────────────────────────────┘
-│  TimedWallpaperWorker     │──进程内 ConfigBus──▶ Engine 热切换
-│  （≥15 分钟周期调度）       │
-└──────────────────────────┘
-```
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Download & install](#download--install)
+  - [Sample wallpaper packs](#sample-wallpaper-packs)
+- [Building from source](#building-from-source)
+  - [Android app](#android-app)
+  - [Desktop admin](#desktop-admin)
+  - [Backend (local development)](#backend-local-development)
+- [Wallpaper packages](#wallpaper-packages)
+  - [Layout](#layout)
+  - [Manifest fields](#manifest-fields)
+  - [Content requirements per type](#content-requirements-per-type)
+  - [Checksum algorithm](#checksum-algorithm)
+  - [Import validation order](#import-validation-order)
+  - [Creating a package step by step](#creating-a-package-step-by-step)
+- [Backend deployment](#backend-deployment)
+  - [Option A: Docker self-hosting (recommended)](#option-a--docker-self-hosting-recommended)
+  - [Option B: Cloudflare Workers](#option-b--cloudflare-workers)
+  - [WebDAV layout](#webdav-layout)
+  - [Pointing the app at your backend](#pointing-the-app-at-your-backend)
+- [Credits](#credits)
+- [License](#license)
 
-关键决策与"为什么"：
+## Features
 
-| 决策 | 原因 |
-|---|---|
-| 视频壁纸走原生 ExoPlayer 直连 Surface（可切硬/软解），不经 Flutter | 解码器直接写 Surface 图形缓冲区（零拷贝）；Flutter Texture 需要跨 GL Context 拷贝，每帧占用 raster 线程 |
-| 深度视差走原生 EGL14 + GLES20 单 pass 位移映射 | 一张 GLSL 位移映射就够；Flutter raster 线程对壁纸级常驻渲染是纯开销 |
-| HTML 壁纸用**离屏 WebView 软件绘制**进壁纸 Surface | **平台现实**：`WallpaperService.Engine` 的窗口由系统进程创建，App 侧只拿到一个 Surface，**无法在壁纸窗口内嵌入 View 层级**（android-37 的 Engine API 无 `onCreateView`；View 层级嵌入属于 DreamService）。离屏 WebView + `lockCanvas()` 软件画布是该约束下的标准做法 |
-| 不把 FlutterEngine 塞进 WallpaperService 常驻 | 四种类型都不需要 Widget 层渲染；`FlutterEngineHolder`（`FlutterEngineGroup` 缓存、长期存活）作为架构扩展位保留给未来的 Widget 层壁纸，默认不创建 |
-| timed = WorkManager"元调度器"，非常驻渲染 | 切换只是改 SharedPreferences + 进程内 `ConfigBus` 通知 Engine 热切换；周期最小 15 分钟是平台硬限制，Doze 下会被合并到维护窗口 |
+- **Video wallpapers** — ExoPlayer writes frames straight into the wallpaper Surface, so there is essentially no extra copy after decoding. Decode mode is selectable (auto / hardware / software); a hardware failure is reported explicitly instead of silently degrading.
+- **Depth parallax** — single-pass displacement mapping with EGL14 + GLES20, driven by the accelerometer and gyroscope. Packages may ship their own GLSL shader.
+- **HTML wallpapers** — an offscreen WebView renders software frames onto the wallpaper Surface, sandboxed to `appassets.local` only; the renderer auto-freezes once the page stops animating.
+- **Timed wallpapers** — WorkManager rotates sub-wallpapers ("slots") on schedule, hot-swapped in-process via `ConfigBus`. Platform minimum interval is 15 minutes.
+- **Wallpaper packages** — a `.zuno` file is a plain ZIP with a manifest and checksum. Import blocks Zip Slip, path traversal, excessive `minSdk`, and recursively validates `timed` sub-packages.
+- **Cloud catalog** — browsing and downloading need no account; download tickets expire in 5 minutes. Upload and deletion live in a separate desktop admin tool.
 
-### 生命周期与功耗控制
+## Screenshots
 
-`Engine.onVisibilityChanged(boolean)` 是功耗枢纽（`ZunoWallpaperService`）：
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/home.png" width="320" alt="My wallpapers" /></td>
+    <td align="center"><img src="docs/images/library.png" width="320" alt="Wallpaper library" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>My wallpapers</b><br/>installed packages, active state, import</td>
+    <td align="center"><b>Wallpaper library</b><br/>cloud catalog with type &amp; size, one-tap download</td>
+  </tr>
+</table>
 
-- `visible == false`：视频 `pause()`；GL 停止帧回调 + 注销传感器监听；WebView `onPause()`（暂停 DOM/JS 定时器）+ 停止绘制循环。
-- 省电模式（`PowerManager.isPowerSaveMode()` + `ACTION_POWER_SAVE_MODE_CHANGED` 动态注册）：视频降级为静态首帧；视差强制 15fps；HTML 冻结 CSS 动画（注入 `animation-play-state: paused`）+ 暂停 JS 定时器。
-- 性能档位（高/中/低，默认**中**，设置页全局调整）：
+## Download & install
 
-| 路径 | 高 | 中 | 低 |
+Grab the latest build from the [**Releases**](https://github.com/Zephyr-Isle/ZUNO/releases/latest) page:
+
+- `ZUNO-<version>.apk` — universal APK (arm64 / armv7a / x86_64, Android 7.0+). Release-CI builds are debug-signed, which is fine for sideloading; to sign with your own key see [Building from source](#building-from-source).
+- `*.zuno` — sample wallpaper packs, also usable as format references (see [the table below](#sample-wallpaper-packs)).
+
+Steps:
+
+1. Install the APK (allow "install unknown apps" if the system asks).
+2. Open ZUNO → **Import** → pick a `.zuno` file (from Downloads, or shared from your file manager).
+3. Tune parameters on the detail page → **Apply wallpaper** → confirm in the system wallpaper preview.
+
+Android does not allow a regular app to set a live wallpaper silently — that last system-confirmation step is mandatory and cannot be skipped.
+
+### Sample wallpaper packs
+
+| Pack | Type | Size | Notes |
 |---|---|---|---|
-| 视频 | 正常播放 | 正常播放 | 静态首帧 |
-| 深度视差 | 30 fps | 20 fps | 15 fps |
-| HTML | 跟随 vsync | ~30 fps | ~15 fps + 冻结 CSS 动画 |
+| [sample_depth](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | depth | 3 KB | Generated demo: depth parallax with built-in assets |
+| [sample_html](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 1 KB | Generated demo: minimal HTML wallpaper |
+| [sample_timed](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | timed | 3 KB | Generated demo: scheduled slot rotation |
+| [lantern-sky](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 150 KB | Lantern night sky |
+| [laser-kitty](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 20 KB | Laser kitty |
+| [liquid-contour](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 241 KB | Liquid contour lines |
+| [mycelium](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 190 KB | Mycelium flow |
+| [particle-field](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 257 KB | Particle field |
+| [rain](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 1.4 MB | Rain on glass (keeps its original `license.txt` and stock-photo attributions) |
+| [slime](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 159 KB | Slime |
+| [steam-glass](https://github.com/Zephyr-Isle/ZUNO/releases/latest) | html | 1.9 MB | Steam glass |
 
-视频解码方式（设置页，`video.decode_mode`）：**自动**优先硬解、完全没有硬解时才用软解；**硬解**只允许硬件解码器；**软解**兼容性最广但耗电/发热明显。硬解失败会记录错误（`video.decode_error`），下次回到 App 时提示切换软解，**不静默降级**。
+Most showcase packs are adapted from web wallpapers in the [Lively Wallpaper](https://github.com/rocksdanister/Lively) project. Each pack keeps whatever license its original author attached (see `content/license.txt` inside `rain`). Import them through the app like any other `.zuno`.
 
-深度视差倍率（设置页，`depth.strength_scale`，0.4–2.0）：叠加在每个深度包自己的视差强度上，供用户按体感收放整体位移。
----
+## Building from source
 
-## 2. ZUNO 壁纸包规范（ZUNO Package v1）
+### Android app
 
-扩展名 `.zip` 或 `.zuno`（本质为 ZIP 容器，store/deflate 均可）。
+Requirements: Flutter 3.47+ (Dart 3.13+), JDK 17, Android SDK with compileSdk 37.
 
-### 目录布局
+```bash
+flutter pub get
+flutter run                 # debug build on a connected device / emulator
+flutter build apk --release
+```
+
+- The release build emits 4 APKs under `build/app/outputs/apk/release/`: ABI splits for `armeabi-v7a`, `arm64-v8a`, `x86_64`, plus a universal APK. R8 minification is on.
+- Without `android/key.properties`, the release build falls back to the debug signing key — it installs fine, just don't ship it as an official release. To sign properly, create `android/key.properties` (git-ignored) with `storeFile`, `storePassword`, `keyAlias`, `keyPassword` pointing at your keystore.
+- The app version comes from `pubspec.yaml` (`version: 1.0.0+1` → `versionName` `1.0.0`, `versionCode` `1`); Gradle reads it automatically.
+- Unit tests don't need a device: `flutter test` (the `samples/` directory doubles as a test fixture).
+
+### Desktop admin
+
+Tauri 2 app for uploading/managing the cloud catalog. Requirements: Node 22+, Rust stable, WebView2 (Windows).
+
+```bash
+cd desktop
+npm install
+npm run tauri dev      # Vite dev server on :1420 + debug window
+npm run tauri build    # bundles under src-tauri/target/release/bundle/
+```
+
+### Backend (local development)
+
+```bash
+cd backend
+npm install
+npm run typecheck            # Worker code
+npm run typecheck:selfhost   # Node self-hosting adapter
+npm run dev                  # wrangler dev — D1 mapped to a local SQLite file
+node tool/stub-webdav.mjs .tmp-dav 8799   # local WebDAV stub for integration testing
+```
+
+## Wallpaper packages
+
+### Layout
+
+A `.zuno` file is a ZIP (store or deflate both fine):
 
 ```
 zuno-root/
-├── manifest.json            # 必需，根目录或单一顶层文件夹内
-├── thumbnail.png            # 可选，建议 480×800、<200KB
-└── content/                 # 必需，所有壁纸素材
+├── manifest.json            # required, at root or inside a single top-level folder
+├── thumbnail.png            # optional, suggested 480×800 and < 200 KB
+└── content/                 # required, non-empty, all wallpaper assets
 ```
 
-manifest.json 之外的其他根级文件在导入时被忽略。content/ 必须存在且非空。
+### Manifest fields
 
-### manifest.json 字段
+| Field | Description |
+|---|---|
+| `schemaVersion` | Currently fixed at `1` |
+| `id` / `version` | id as a reverse-domain or UUID; re-importing the same id overwrites the old version; version is semver |
+| `title` | Display name in the library |
+| `type` | `video` / `depth` / `html` / `timed` |
+| `entry` | Entry file path relative to the package root, must actually exist |
+| `minSdk` | Defaults to 24; import is rejected if the device API level is lower |
+| `checksum` | `sha256-` + lowercase hex, covering every file under `content/` |
+| `config` | Tunable parameter declarations; supports float / int / bool / color |
+| `capabilities` | Records `network` / `pointer` / `sensors`; in v1 network is recorded but not granted |
 
-```json
-{
-  "schemaVersion": 1,
-  "id": "com.example.aurora_video",
-  "version": "1.0.0",
-  "title": "Aurora Loop",
-  "author": { "handle": "studio_x" },
-  "type": "video",
-  "entry": "content/main.mp4",
-  "minSdk": 24,
-  "checksum": "sha256-...",
-  "performanceHint": "medium",
-  "config": [
-    { "key": "playback_speed", "type": "float", "label": "播放速度",
-      "min": 0.5, "max": 2.0, "default": 1.0 }
-  ],
-  "capabilities": { "network": [], "pointer": false, "sensors": [] }
-}
-```
+### Content requirements per type
 
-| 字段 | 类型 | 必需 | 说明 |
-|---|---|---|---|
-| schemaVersion | number | 是 | 固定为 1 |
-| id | string | 是 | 反向域名或 UUID（`[A-Za-z0-9_.]`）；同 id 导入覆盖旧版本 |
-| version | string | 是 | 语义化版本（`1.2.3[-suffix]`） |
-| title | string | 是 | 库内显示名 |
-| author | object | 否 | `{ id?, handle? }` |
-| type | string | 是 | `video` / `html` / `depth` / `timed` |
-| entry | string | 是 | 主入口文件相对包根的路径，必须存在 |
-| minSdk | number | 否 | 默认 24；高于设备 API 时拒绝导入 |
-| checksum | string | 建议 | `sha256-` + hex，覆盖 content/ 下所有文件 |
-| performanceHint | string | 否 | `low/medium/high`，默认 medium |
-| config | array | 否 | `key`(必需)、`type`(float/int/bool/color)、`label?`、`min/max?`、`default?`、`note?` |
-| capabilities | object | 否 | `network: string[]`（v1 实现仍禁网）、`pointer: bool`（HTML 触摸）、`sensors: string[]`（仅 depth 有效） |
+- `video`: `content/main.mp4`, H.264/H.265, recommended ≤ 15 s loop.
+- `depth`: `content/color.jpg` and `content/depth.png` (grayscale, same size, required), optional `content/shader.glsl`.
+- `html`: `content/index.html` plus self-contained in-package assets — external CDNs are unreachable from the sandbox.
+- `timed`: `content/schedule.json` plus `content/slot_*/`; each slot is a standalone sub-package, but nesting `timed` inside `timed` is rejected.
 
-### 各 type 的 content/ 结构
+### Checksum algorithm
 
-- **video**：`content/main.mp4`（H.264/H.265，建议 ≤15s 循环，分辨率 ≤ 屏幕物理分辨率）。
-- **depth**：`content/color.jpg`（entry 指向）、`content/depth.png`（灰度、与 color 同尺寸，**必需**，渲染器固定读取该路径）、`content/shader.glsl`（可选，见 §3）。
-- **html**：`content/index.html`（entry 指向）+ 包内自包含资源；**禁止外部 CDN**。
-- **timed**：`content/schedule.json` + `content/slot_*/`（每个 slot 内有自己的最简 `manifest.json`（schemaVersion/id/type/entry），type 不允许嵌套 timed，slot id 不得与顶层包 id 冲突）。
+List every file under `content/` by its POSIX path relative to the package root, ascending. Feed `path UTF-8 bytes + 0x0A + file bytes` into a single SHA-256 state in that order. Write the result as `sha256-<lowercase hex>`.
 
-```json
-{
-  "rules": [
-    { "from": "06:00", "to": "18:00", "wallpaper": "slot_day" },
-    { "from": "18:00", "to": "06:00", "wallpaper": "slot_night" }
-  ],
-  "default": "slot_morning",
-  "constraints": { "chargingOnly": false, "minIntervalMinutes": 30 }
-}
-```
+### Import validation order
 
-规则匹配：`from < to` 为 `[from, to)`；`from > to` 为跨午夜；`from == to` 视为空窗口（永不匹配）。
+Path traversal → manifest exists → required fields → type → entry → content non-empty → minSdk → checksum → timed recursion. Any failure rejects the whole package with a concrete reason.
 
-### checksum 规范
+### Creating a package step by step
 
-`content/` 下所有文件按**相对包根的 POSIX 路径**做码元升序排序，依次把 `路径 UTF-8 字节 + 0x0A + 文件字节` 追加进同一 SHA-256 状态，结果表示为 `sha256-<小写 hex>`。`tool/create_sample_packages.dart` 与导入器双侧实现一致（`lib/wallpaper_package/checksum.dart`）。
+1. Create a source directory:
 
-### 校验顺序（任何一步失败整包拒绝，UI 给出具体原因）
+   ```
+   my-wallpaper/
+   ├── manifest.json
+   └── content/
+       └── index.html
+   ```
 
-路径遍历检查 → manifest.json 存在性 → 必填字段完整性 → type 合法性 → entry 存在性 → content/ 非空 → minSdk ≤ 设备 API → checksum 比对（若存在）→ timed 子包递归校验。
+2. Write a minimal manifest (HTML example):
 
----
+   ```json
+   {
+     "schemaVersion": 1,
+     "id": "com.example.my-wallpaper",
+     "version": "1.0.0",
+     "title": "My Wallpaper",
+     "type": "html",
+     "entry": "content/index.html"
+   }
+   ```
 
-## 3. HTML 壁纸沙箱
+3. Pack it — either way the checksum is recomputed for you:
+   - **Desktop admin**: *Pack from source directory* validates the manifest and entry, recomputes the checksum, and auto-generates `thumbnail.png` when missing.
+   - **CLI**: put your package directory (or several) under a staging folder, then
 
-- 本地资源经 `WebViewAssetLoader` 以 **`https://appassets.local/`** 提供；`file://` 全禁（`allowFileAccess=false`、`allowFileAccessFromFileURLs=false`、`allowUniversalAccessFromFileURLs=false`、`allowContentAccess=false`）。自定义 `DirectoryPathHandler` 对每个请求做 canonical path 校验防路径逃逸。
-- `shouldInterceptRequest` 对一切未被 AssetLoader 命中的请求返回 **403** —— 壁纸默认禁网。`capabilities.network` 需要用户二次确认后放行，**v1 实现选择完全不放行**。
-- 导航只允许 `appassets.local` 源内跳转；窗口/弹窗禁用；摄像头/麦克风/定位权限请求一律拒绝。
-- JS 桥只有 `@JavascriptInterface setConfig(key, value)` 一个方法（`window.ZunoWallpaper`）；初始配置通过页面加载完成后注入的 `window.__ZUNO_CONFIG__` 全局变量提供。
-- **自适应渲染**（功耗优化）：引擎每 3 秒探测一次页面动态性——`document.getAnimations()` 数量 + 近 4 秒内是否有 `requestAnimationFrame`（引擎会在页面加载后给 rAF 打补丁记录时间戳）。探测为静止的页面停止周期重绘，仅在触摸（8 秒宽限期）、参数变化时重绘一帧；动态页面回到档位帧率。**页面可用 `window.__zunoKeepAlive = 1` 强制持续渲染**（用于 setInterval/canvas 自绘等探测不到的动画）。
-- WebView 层类型设为 `LAYER_TYPE_NONE`（离屏软件绘制链路下硬件层无收益，仅额外耗显存；规格提示此值需实测，代码中保留为常量便于 A/B）。
-- 触摸：`Engine.setTouchEventsEnabled(true)` → `onTouchEvent` 直接 `dispatchTouchEvent` 给离屏 WebView。
-- 预览页（`HtmlPreviewActivity`）与壁纸引擎共用同一个 `SandboxedWebViewFactory`，预览即实况。
+     ```bash
+     dart run tool/pack_zuno.dart --src <staging directory> --out <output directory>
+     ```
 
-### depth 自定义着色器契约（content/shader.glsl）
+4. Import the resulting `.zuno` in the app to verify, then upload it with the desktop admin if you want it in your cloud catalog.
 
-GLSL ES 1.00 片段着色器，替换内置片段源；可用的 uniform（编译器裁剪掉也安全）：
+The packs under [`samples/`](samples/) are the best starting reference — each one unpacks to exactly this layout.
 
-```glsl
-precision mediump float;
-uniform sampler2D sColor;   // 颜色纹理（unit 0）
-uniform sampler2D sDepth;   // 深度纹理（unit 1，.r：0=远 1=近）
-uniform vec2  uTilt;        // 低通滤波后的设备倾斜 [-1,1]
-uniform float uStrength;    // 视差强度（UV 单位）
-uniform float uZoom;        // 过扫描系数（1 + 2*strength）
-uniform float uAspect;      // 宽高比
-varying vec2  vUV;          // 全屏 UV
-```
+## Backend deployment
 
-编译失败时自动回退内置视差着色器并打 logcat。
+The backend (`backend/`) serves the app's wallpaper library: catalog listing, 5-minute download tickets, and full-file streaming proxy. It has no database server dependency — SQLite semantics only, one storage backend (WebDAV) for the actual packages.
 
----
+### Option A: Docker self-hosting (recommended)
 
-## 4. 构建与运行
+Two containers: `zuno-api` (this repo's backend, Node) and a WebDAV server for packages/covers. Total setup time: about 5 minutes.
 
 ```bash
-# 环境：Flutter 3.47+（Dart 3.13+），Android SDK 34+，JDK 17
-flutter pub get
-
-# 静态检查 + 单元测试（导入/校验全流程测试，无需设备）
-flutter analyze
-flutter test
-
-# 生成示例包到 samples/（depth / html / timed；视频示例需自备 mp4）
-dart run tool/create_sample_packages.dart --video path/to/loop.mp4
-# 改图标：替换 assets/icon/app_icon_{background,foreground}_src.png 后依次运行
-python -I tool/generate_launcher_icon.py   # 派生 app_icon*.png + 全部 mipmap/自适应层
-dart run flutter_launcher_icons            # 生成清单引用的 @mipmap/launcher_icon
-
-# 运行（模拟器或真机）
-flutter run
+git clone https://github.com/Zephyr-Isle/ZUNO
+cd ZUNO/backend
+cp selfhost.env.example .env          # fill in the secrets
+cp webdav.example.yml webdav.yml      # default config is fine
+docker compose up -d
+curl http://127.0.0.1:8080/health     # {"ok":true,"database":"ok",...}
 ```
 
-### 发布构建（上线）
+`.env` variables:
+
+| Variable | Used by | Description |
+|---|---|---|
+| `WEBDAV_BASE` | zuno-api | WebDAV root URL. Keep `http://webdav:6065` (compose-internal service name) |
+| `WEBDAV_USER` / `WEBDAV_PASS` | zuno-api | **Read-only** WebDAV account (`zuno-api` user); the Worker never writes |
+| `TICKET_SECRET` | zuno-api | HMAC key for download tickets, ≥ 32 random bytes. Leak = forgeable download links only |
+| `ADMIN_SECRET` | zuno-api | Password for `/api/admin/sync` and `/api/admin/delete` |
+| `PBKDF2_ITERATIONS` | zuno-api | Password hashing cost; `100000` is comfortable without Cloudflare's 10 ms CPU cap |
+| `WEBDAV_ADMIN_PASSWORD` | webdav | Password for the CRUD account the desktop admin uses |
+| `WEBDAV_API_PASSWORD` | webdav | Password for the read-only account; must equal `WEBDAV_PASS` |
+
+Generate secrets with `openssl rand -base64 32` (one per secret).
+
+- Data lives in two named volumes: `zuno-db` (SQLite, via `DB_PATH=/data/zuno.db`) and `zuno-dav` (`packages/` + `covers/`).
+- The server boots even with missing config: `/health` works, and affected endpoints answer `server_misconfigured` listing what's missing — check `docker compose logs zuno-api`.
+- Upgrade: `docker compose pull && docker compose up -d` (or rebuild locally by uncommenting `build: .` in the compose file).
+
+### Option B: Cloudflare Workers
+
+The original deployment target — Workers + D1 + WebDAV (no R2). The Worker handles the API, auth, download tickets, and full-file streaming; D1 stores users, sessions, and wallpaper metadata; `.zuno` packages and covers sit on any WebDAV you point it at.
 
 ```bash
-# 1. 正式签名：创建 android/key.properties（不入库）：
-#    storeFile=/absolute/path/to/release.keystore
-#    storePassword=...
-#    keyAlias=...
-#    keyPassword=...
-#    未配置时自动回退 debug 签名（仅本地验证用）。
+cd backend
+npm install
+cp wrangler.toml.example wrangler.toml   # fill in database_id, custom domain, WEBDAV_BASE
 
-# 2. Release 构建已默认启用 R8 + 资源收缩（规则见 android/app/proguard-rules.pro；
-#    其中 androidx.work.impl.** 整包保留是 AGP 9.1 R8 全模式与 WorkManager 内置
-#    Room 反射的兼容性修复——真机 release 崩溃验证后加入，勿删）。
-flutter build apk --release                   # 通用 APK（~51MB）
-flutter build apk --release --split-per-abi   # 按 ABI 拆分（体积更小）
-flutter build appbundle                       # Play Store 上架产物（.aab）
+npx wrangler d1 create zuno
+npm run db:init:local
+npm run db:init:remote
 
-# 3. Release 模式真机验证清单（务必执行：AOT + R8 行为可能与 debug 不同）
-#    · 冷启动 App → 壁纸库 UI 正常渲染
-#    · 此前应用的动态壁纸仍然工作（home 屏确认）
-#    · 导入示例包 → 详情页 → 应用 → 系统选择器确认
-#    · logcat 无 FATAL EXCEPTION
+npx wrangler secret put WEBDAV_USER
+npx wrangler secret put WEBDAV_PASS
+npx wrangler secret put TICKET_SECRET      # ≥ 32 random bytes
+npx wrangler secret put ADMIN_SECRET
+
+npm run deploy
 ```
 
-使用流程：导入 `.zuno` 包 → 详情页调整参数 → **应用此壁纸** → 系统动态壁纸预览页点击"设置壁纸"确认。详情页右上角的**导出/分享**按钮可把已安装包重新打包为 .zuno（流式导出，manifest 的 checksum 依然有效），经系统分享面板发给其他设备后可直接导入。
+Things that bite people on the free tier:
 
-> 应用路径说明：`WallpaperManager.setWallpaperComponent()` 不在公共 SDK 中（需要系统签名权限 `SET_WALLPAPER_COMPONENT`，已用 android-34 的 android.jar 验证），普通应用设置动态壁纸的唯一途径是 `ACTION_CHANGE_LIVE_WALLPAPER` 系统预览页——ZUNO 由此实现"写入激活配置 → 拉起系统预览"两步应用。timed 包在应用时先解析当前时段的 slot 子包写入激活配置，后续切换由 WorkManager 在进程内热切换，不再走系统流程。
+- Use a dedicated **read-only** WebDAV account scoped to the ZUNO directory, force HTTPS, use a long random password. Secrets only ever go through `wrangler secret`, never into the repo.
+- Downloads are streamed as whole files; no `206` or resume. Workers' `fetch` strips `Range` on subrequests, so the upstream always answers 200 — the client treats a full file as success.
+- The free tier allows 10 ms CPU per request, so PBKDF2 runs 10000 iterations. When syncing packages, don't scan everything at once — use `POST /api/admin/sync?id=<id>` per package, or page through with `offset`/`limit` until `nextOffset` is null.
 
-### 项目结构
+### WebDAV layout
 
 ```
-lib/
-├── main.dart / app.dart
-├── core/zuno_paths.dart
-├── models/                  # manifest / 库条目 / 类型 / 调度模型
-├── wallpaper_package/       # ← ZIP 解析与 manifest 校验（isolate 安全，纯 Dart）
-│   ├── zip_importer.dart    #    导入编排（校验顺序见 §2）
-│   ├── manifest_validator.dart
-│   ├── zip_exporter.dart    #    流式导出（包 → .zuno，供分享/迁移）
-│   ├── path_guard.dart      #    Zip Slip 防御
-│   ├── checksum.dart        #    §2 checksum 规范
-│   ├── timed_schedule.dart
-│   └── validation_failure.dart
-├── services/                # Platform Channel 封装 / Hive 库 / 应用器
-├── state/library_controller.dart
-└── ui/                      # screens / widgets / preview
-android/app/src/main/kotlin/com/zuno/wallpaper/
-├── MainActivity.kt / ZunoApplication.kt
-├── bridge/                  # ZunoBridge（唯一 MethodChannel）、BatteryGuard
-├── flutter/FlutterEngineHolder.kt   # 架构扩展位（默认不创建引擎）
-└── wallpaper/
-    ├── ZunoWallpaperService.kt      # Engine：只做生命周期调度
-    ├── ActiveWallpaperStore.kt      # 激活状态唯一事实来源（SharedPreferences）
-    ├── ConfigBus.kt                 # 进程内热切换事件总线
-    ├── PerformanceTier.kt
-    ├── engine/                      # video / depth / html 三条渲染路径 + 委托接口
-    ├── gl/                          # GlRenderThread（EGL14）、ParallaxRenderer、ShaderUtil
-    ├── html/                        # SandboxedWebViewFactory、DirectoryPathHandler、
-    │                                # WallpaperJsBridge、MimeTypes、HtmlPreviewActivity
-    └── timed/                       # TimedScheduleResolver、TimedWallpaperWorker(+Scheduler)
-tool/create_sample_packages.dart     # 示例包生成器
-test/zip_importer_test.dart          # 导入/校验单元测试
-backend/                             # Workers + D1 + WebDAV 云端（契约见 docs/backend.md）
-│ └── src/admin-delete.ts             #  管理端删除：D1 记录（文件由管理端直连 WebDAV 删）
-desktop/                             # Tauri 2 壁纸管理端（详见 desktop/README.md）
-  ├── src/                           #  TypeScript 前端：云端 / 本地 / 设置
-  └── src-tauri/src/                 #  Rust：校验、checksum、压缩、上传、预览、删除
+<WEBDAV_BASE>/
+  packages/<id>/<version>/<id>-<version>.zuno
+  covers/<id>.png
 ```
 
----
+Each version directory should also contain a `manifest.json` sidecar (the desktop admin writes it automatically on upload). Without it, the Worker can only extract the manifest from the ZIP itself for packages ≤ 16 MB; larger packages get skipped.
 
-## 5. 已知平台限制
+### Pointing the app at your backend
 
-1. **HTML 壁纸的渲染路径**：壁纸窗口由系统进程管理、无法嵌入 View 层级（§1），因此 HTML 壁纸每帧走 `WebView.draw()` 软件绘制。成本与页面复杂度线性相关——帧率档位就是功耗保险丝；简单 CSS/Canvas 页面在 30fps 下表现良好，重型 WebGL 页面不适合做壁纸。
-2. **HTML 禁网是硬性的**：`capabilities.network` 声明在 v1 中被记录但**不放行**（避免"壁纸偷跑流量"风险）。需要用户二次确认的放行机制留作后续版本。
-3. **WorkManager 最小周期 15 分钟**：timed 壁纸的分钟级精度在 Doze 模式下不可保证（系统会合并到维护窗口）。激活 timed 包时还会在下一个规则边界排一次性任务（`scheduleNext`，非精确闹钟，Doze 同样会推迟），15 分钟周期任务保留为兜底。`constraints.minIntervalMinutes` 做切换节流；加入电池优化白名单可显著降低延迟（设置页有引导）。
-4. **动态壁纸必须经系统预览/选择器确认**，无法静默设置。且存在 ROM 差异：标准 `ACTION_CHANGE_LIVE_WALLPAPER`（带确认的系统预览页）在部分 ROM（实测 Xiaomi HyperOS）上没有处理器，ZunoBridge 会自动回退到 `ACTION_LIVE_WALLPAPER_CHOOSER`（系统选择器的“动态壁纸”列表，实测可用），两级都失败时返回 false 由 UI 提示。
-5. **同进程约束**：WallpaperService 与主 App 同进程（未声明 `android:process`），`ConfigBus` 热切换依赖这一点。若未来拆分进程，需要改用广播/Messenger。
-6. **`pauseTimers()` 未使用**：它是 WebView 进程级开关，会连 App 内 HTML 预览 Activity 一起冻结；改用 per-view `onPause()/onResume()`。
-7. **深度视差仅用加速度计+陀螺仪**：`capabilities.sensors` 在导入时记录；运行时设备无对应传感器则渲染为静态图（有 logcat 提示）。
-8. **深度视差静止降帧**：倾斜低通滤波的变化量在 2 秒内低于阈值（设备平放）时，帧率自动压到 15fps；一旦倾斜变化立即回到档位帧率。省电模式的 15fps 上限与之叠加取更小值。
-9. **导入缩略图**：包自带 `thumbnail.png` 时优先使用；没有时导入器自动生成——video 取首帧关键帧、depth 缩放颜色图、html 用沙箱 WebView 离屏真实渲染页面后截图（480×800、JPEG 质量 82，与壁纸渲染同一套实现），timed 父包显示占位图标。
-10. **SAF 文件选择器与自定义扩展名**：`FileType.custom` + 自定义扩展名（.zuno）会被部分 ROM 的 documentsui 禁用条目（无法按 MIME 匹配），因此导入使用 `FileType.any`，由导入器的完整校验链拒绝非法文件。
-11. **备份策略**：`allowBackup=false`——壁纸包是可再导入的便携文件（详情页导出/分享即迁移手段），云端备份 72MB 级视频会超出 Play 25MB 配额且无意义；用户参数与索引随应用数据生命周期。
-12. **设备/ROM 差异**：`WebView.setLayerType(LAYER_TYPE_NONE)` 的取舍（§3）、省电模式广播的送达时机、部分 OEM 对 WorkManager 的加急限制，均需在目标机型上实测。
-13. **模拟器（MuMu 等）怪癖**：`install -r` 更新时其修改版 WallpaperManagerService 对 PACKAGE_REMOVED/ADDED 广播对存在竞态，偶发把动态壁纸判为 "uninstalled, removing" 并回退系统默认（真机 AOSP 无此问题，动态壁纸跨更新保持是标准行为）——模拟器上重新应用一次即可。
-14. **`gradlew lint` 环境限制**：pub 缓存与工程跨盘符（C:/D:）时插件 lint 模型任务解析失败，无法在本布局下运行 Android Lint；Kotlin 层质量由"编译零警告 + R8 通过 + 真机运行验证"保障。
+ZUNO ships with **no built-in server**. Open the app → *Settings* → *Wallpaper library address* → enter your deployment's base URL (e.g. `https://api.example.com` or `http://192.168.1.10:8080`). Saving rebuilds the catalog immediately; *Clear address* returns the library tab to its "not configured" guide.
 
-## 6. 验证状态（上线审计后）
+## Credits
 
-以下门禁全部在本仓库实测通过：
+- [Lively Wallpaper](https://github.com/rocksdanister/Lively) — most showcase packs are adapted from its web wallpaper collection.
+- [liquid_glass_widgets](https://pub.dev/packages/liquid_glass_widgets) — the liquid-glass UI system.
+- [Media3 / ExoPlayer](https://github.com/androidx/media) — video decoding.
+- [Tauri](https://v2.tauri.app/) — the desktop admin app.
+- [hacdias/webdav](https://github.com/hacdias/webdav) — the bundled self-hosting WebDAV server.
+- Stock photography inside the `rain` pack is attributed in its `content/license.txt` (Pexels / Unsplash).
 
-- `flutter analyze`：No issues found。
-- `flutter test`：37/37 通过——
-  - ZIP 导入全流程、Zip Slip 拒绝、manifest id 路径遍历拒绝（`.`/`..`）、type/entry/minSdk/content 校验、checksum 比对、timed 递归校验（slot 缺失 / id 冲突 / 嵌套 timed / 空 content）、畸形 capabilities 不崩溃、跨午夜时段解析；
-  - samples/ 三个示例包的端到端导入回归；
-  - ConfigEditor / PackageCard / TypeBadge 的 Widget 测试。
-- 构建产物：
-  - `flutter build apk --debug`：成功；
-  - `flutter build apk --release`：成功（**R8 + 资源收缩开启**，50.9MB，含 WorkManager Room 反射兼容 keep 规则——真机崩溃验证后加入，见 proguard-rules.pro 注释）；
-  - `flutter build appbundle`：成功（Play Store 上架产物 .aab）。
-- 设备端全类型验证（MuMu 模拟器 / Android 16 镜像，Release 模式，logcat 零 FATAL）。
-- 本轮新增验证：设置页齿轮图标与深色/浅色下的分段控件截图确认；视频解码方式（自动/硬解/软解）与深度倍率写入 `zuno_config` 后重启保持；ExoPlayer 壁纸引擎在 `flutter build apk --release`（R8 + 资源收缩）下编译通过。系统动态壁纸预览页之后的桌面色帧本轮未截图确认（模拟器整屏截图管线卡死），需真机复验。第十轮后新增：`onSurfaceRedrawNeeded` 转发（HTML 静态页亮屏重绘）、三类型 `onComputeColors`（Material You 取色，"Cannot extract colors" 告警归零）、`allowBackup=false` 备份策略、HTML 引擎档位字段缓存（消除每帧 store 读取）。
-- **实测 CPU 占用**（MuMu x86_64，`top -b -n 3` 采样，540×960 网格页前台）：视频壁纸（H.264 硬解播放中）**2.0–3.7%**；HTML 壁纸（动画星空页 30fps 软件绘制）**7.6–9.0%**；深度壁纸（GL 20fps + 虚拟传感器输入）**8.5–11.5%**。视频路径的硬解直连设计得到数据验证；模拟器 gfxstream 图形后端对 GL/WebView 路径有额外开销，真机数字预期更低。
-  - **HTML**：导入（沙箱 WebView 离屏截图缩略图）→ 应用 → 主屏星空实时渲染，WebView 沙箱进程存活；
-  - **深度**：导入 → 应用 → **GL 渐变与月亮正确渲染**（发现并修复“不可见期创建的线程永不恢复渲染”缺陷，见 DepthWallpaperEngine.onVisibilityChanged）；
-  - **视频**：导入（首帧缩略图）→ 应用 → 路径解析缺陷已修复；AV1 编码在模拟器硬解上不受支持 → 已新增**导入期编码探测告警**（H.264/H.265 规格列表外弹出提醒，真机硬件解码不受影响）；壁纸引擎已从 `MediaPlayer` 换成 ExoPlayer（`media3` 1.9.2，与预览同版本），设置页可切自动/硬解/软解；
-  - **timed**：导入 → 调度窗口/当前时段解析正确 → slot 子壁纸渲染；WorkManager worker 通过 `cmd jobscheduler run` 强制执行无崩溃（实际切换粒度 ≥15 分钟为平台限制）；边界一次性任务与 `APPEND_OR_REPLACE` 续排逻辑经代码审查（最小延迟 5 秒防空转），长时观察仍需真机；
-  - 导出/分享：打包 → FileProvider → 系统分享面板拉起成功（测试镜像无分享目标属环境现象）；
-  - 审计中发现并回写代码：ROM 三级回退链（§5.4）、`FileType.any`（§5.10）、R8 WorkManager 兼容规则（§4）。
-- 上线前仍需人工完成：配置正式签名密钥（android/key.properties）、Play Console 元数据与隐私声明（本应用无网络权限、零数据采集）、真机硬件上的深度视差传感器位移与 timed 长时观察。
+## License
 
----
-
-## 许可证
-
-[MIT](LICENSE)。示例壁纸包（`samples/`）仅用于测试与格式演示。
-
+This project is [MIT licensed](LICENSE). Wallpaper packs keep their own licenses and attributions — check `manifest.json` and any `content/license.txt` before redistributing them.
