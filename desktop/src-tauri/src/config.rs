@@ -23,7 +23,9 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            api_base: "https://zuno-api.zephyrisle.qzz.io".into(),
+            // ZUNO 不内置云端服务：地址指向用户自己部署的 zuno-api，
+            // 在「设置」里填写（部署步骤见 README「后端部署」）。
+            api_base: String::new(),
             admin_secret: String::new(),
             webdav_base: String::new(),
             webdav_user: String::new(),

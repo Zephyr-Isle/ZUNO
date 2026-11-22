@@ -12,6 +12,7 @@ import 'package:zuno/services/remote_api.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 
 Future<void> main() async {
@@ -30,6 +31,9 @@ Future<void> main() async {
   final catalog = CatalogController(api);
   // 外观模式必须在首帧前读取：先渲染浅色再切深色会白闪一下。
   final themeController = await ThemeController.load();
+  // 界面偏好（底部 TAB 显隐）：同样在首帧前读取，避免壳层先按默认值
+  // 渲染一帧再跳变。
+  final shellPrefs = await ShellPrefsController.load();
   // 清理上次进程死亡遗留的导入暂存目录（正常路径导入完成即删；
   // 被 kill 打断时会留下孤儿目录，占着视频包大小的磁盘空间）。
   unawaited(_cleanupStaleStaging());
@@ -139,6 +143,7 @@ Future<void> main() async {
         themeController: themeController,
         endpoint: endpoint,
         catalog: catalog,
+        shellPrefs: shellPrefs,
       ),
     ),
   );

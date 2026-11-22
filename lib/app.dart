@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/main_shell_screen.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
@@ -16,12 +17,14 @@ class ZunoApp extends StatelessWidget {
     required this.themeController,
     required this.endpoint,
     required this.catalog,
+    required this.shellPrefs,
   });
 
   final LibraryController controller;
   final ThemeController themeController;
   final EndpointController endpoint;
   final CatalogController catalog;
+  final ShellPrefsController shellPrefs;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +43,7 @@ class ZunoApp extends StatelessWidget {
           themeController: themeController,
           endpoint: endpoint,
           catalog: catalog,
+          shellPrefs: shellPrefs,
         ),
       ),
     );
@@ -62,9 +66,7 @@ ThemeData _theme(Brightness brightness) {
         primary: zunoAccent,
         onPrimary: Colors.white,
         surface: background,
-        surfaceContainerLowest: dark
-            ? const Color(0xFF1C1C1E)
-            : Colors.white,
+        surfaceContainerLowest: dark ? const Color(0xFF1C1C1E) : Colors.white,
       );
   final base = ThemeData(
     useMaterial3: true,
@@ -80,9 +82,7 @@ ThemeData _theme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      foregroundColor: dark
-          ? const Color(0xFFF5F4F8)
-          : const Color(0xFF1C1C1E),
+      foregroundColor: dark ? const Color(0xFFF5F4F8) : const Color(0xFF1C1C1E),
       systemOverlayStyle: dark
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,

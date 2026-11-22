@@ -1,0 +1,55 @@
+# ZUNO 自托管：zuno-api（本仓库 backend 的 Docker 镜像）+ WebDAV 存储。
+#
+# 快速开始：
+#   cp selfhost.env.example .env   # 填入 4 个 secret（生成方法见文件内注释）
+#   cp webdav.example.yml webdav.yml
+#   docker compose up -d
+#   curl http://127.0.0.1:8080/health
+#
+# 之后用桌面管理端把 WebDAV 指到 http://<主机>:6065 上传壁纸包，
+# App 的「设置 → 壁纸库地址」填 http://<主机>:8080。详见 README「后端部署」。
+
+services:
+  zuno-api:
+    image: ghcr.io/zephyr-isle/zuno-api:latest
+    # 想本地构建时改用：注释掉上面 image 行，打开下面 build 行。
+    # build: .
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - zuno-db:/data
+    depends_on:
+      - webdav
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  webdav:
+    # 壁纸包和封面放 WebDAV（目录约定 /data/packages、/data/covers）。
+    image: ghcr.io/hacdias/webdav:v5.17.3
+    command: ["-c", "/config.yml"]
+    environment:
+      WEBDAV_ADMIN_PASSWORD: ${WEBDAV_ADMIN_PASSWORD:?请在 .env 中设置 WEBDAV_ADMIN_PASSWORD}
+      WEBDAV_API_PASSWORD: ${WEBDAV_API_PASSWORD:?请在 .env 中设置 WEBDAV_API_PASSWORD}
+    volumes:
+      - ./webdav.yml:/config.yml:ro
+      - zuno-dav:/data
+    ports:
+      # 暴露给桌面管理端直传（Worker 只在 compose 内网访问它）。
+      - "6065:6065"
+    restart: unless-stopped
+
+volumes:
+  zuno-db:
+  zuno-dav:

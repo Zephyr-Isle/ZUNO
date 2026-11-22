@@ -1,6 +1,6 @@
 // 云端壁纸目录的数据模型（对应 zuno-api 的 JSON 契约）。
 //
-// 后端不下发 `webdav_path` / `cover_path`（见 docs/backend.md）：客户端只拿
+// 后端不下发 `webdav_path` / `cover_path`（见 internal-docs/docs/backend.md）：客户端只拿
 // id、元数据与 `hasCover` 布尔值；封面图通过 `/api/wallpapers/:id/cover`
 // 代理获取（下载前即可在壁纸库列表预览），真正的包仍走一次性票据下载。
 

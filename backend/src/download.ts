@@ -1,7 +1,7 @@
 /**
  * 下载：校验票据后把 Range 请求转发给 WebDAV，原样流式返回。
  *
- * 硬性要求（docs/backend.md §5）：
+ * 硬性要求（internal-docs/docs/backend.md §5）：
  * - 流式返回 upstream.body，绝不 arrayBuffer()（Worker 内存 128MB）；
  * - 206 / Content-Range / Accept-Ranges 原样透传，否则断点续传坏掉；
  * - 支持 HEAD；

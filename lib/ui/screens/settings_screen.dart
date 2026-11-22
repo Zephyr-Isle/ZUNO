@@ -7,18 +7,20 @@ import 'package:zuno/core/zuno_paths.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
+import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/about_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
 
-/// 设置页：壁纸库地址、外观模式、全局性能档位、电池优化白名单、关于。
+/// 设置页：壁纸库地址、外观模式、界面、全局性能档位、电池优化白名单、关于。
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.themeController,
     required this.endpoint,
     required this.catalog,
+    required this.shellPrefs,
   });
 
   final ThemeController themeController;
@@ -26,6 +28,9 @@ class SettingsScreen extends StatefulWidget {
 
   /// 保存新地址后要重建目录，否则列表还是旧后端的条目。
   final CatalogController catalog;
+
+  /// 界面偏好（底部玻璃 TAB 显隐）：改动立即反映到主壳。
+  final ShellPrefsController shellPrefs;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -39,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _tier = 'medium';
   String _decodeMode = 'auto';
   bool _decodePrompt = true;
+  bool _showTabBar = false; // 与主壳默认一致（隐藏），加载后校正
   double _depthScale = 1.0;
   bool _batteryIgnored = true; // 先按 true 渲染避免闪烁，加载后校正
   bool _loading = true;
@@ -105,6 +111,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ZunoNative.getVideoDecodeMode(),
       ZunoNative.getVideoDecodePrompt(),
       ZunoNative.getDepthStrengthScale(),
+      ZunoNative.getShowTabBar(),
     ]);
     if (!mounted) return;
     setState(() {
@@ -113,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _decodeMode = results[2] as String? ?? 'auto';
       _decodePrompt = results[3] as bool? ?? true;
       _depthScale = (results[4] as num?)?.toDouble() ?? 1.0;
+      _showTabBar = results[5] as bool? ?? false;
       _loading = false;
     });
   }
@@ -130,6 +138,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setDecodePrompt(bool enabled) async {
     await ZunoNative.setVideoDecodePrompt(enabled);
     if (mounted) setState(() => _decodePrompt = enabled);
+  }
+
+  /// 底部玻璃 TAB 显隐：写原生 → 更新控制器（主壳监听后立即重建）→
+  /// 本页开关同步。
+  Future<void> _setShowTabBar(bool enabled) async {
+    await widget.shellPrefs.setShowTabBar(enabled);
+    if (mounted) setState(() => _showTabBar = enabled);
   }
 
   Future<void> _setDepthScale(int index) async {
@@ -162,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _resetUrl() async {
-    await widget.endpoint.resetToDefault();
+    await widget.endpoint.clearUrl();
     if (!mounted) return;
     _urlController.text = widget.endpoint.url;
     setState(() {});
@@ -170,7 +185,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     lgw.GlassToast.show(
       context,
-      message: '已恢复默认地址',
+      message: '已清除壁纸库地址',
       type: lgw.GlassToastType.success,
     );
   }
@@ -231,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Expanded(
               child: GlassSecondaryButton(
                 icon: AppIcons.refresh,
-                label: '恢复默认',
+                label: '清除地址',
                 onPressed: _resetUrl,
               ),
             ),
@@ -293,6 +308,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 12,
                         height: 1.5,
                         color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _sectionLabel(context, '界面'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: lgw.GlassContainer.card(
+                      shape: glassShape(radius: 24),
+                      surfaceStyle: lgw.GlassSurfaceStyle.solid,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('显示底部导航栏'),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '隐藏时用顶栏按钮切换「我的壁纸 / 壁纸库」',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          lgw.GlassSwitch(
+                            value: _showTabBar,
+                            onChanged: _setShowTabBar,
+                            width: 51,
+                            height: 31,
+                            activeColor: scheme.primary,
+                            quality: lgw.GlassQuality.premium,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -461,9 +513,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
-                      '当前生效：${widget.endpoint.url}\n'
-                      '默认地址：${widget.endpoint.defaultUrl}\n'
-                      '自建 zuno-api 时填你自己的 Worker 域名；保存后会立即重建目录。',
+                      widget.endpoint.isConfigured
+                          ? '当前生效：${widget.endpoint.url}\n'
+                                '地址指向你自己部署的 zuno-api（Docker 或 Cloudflare'
+                                ' Workers，部署步骤见 README）；保存后会立即重建目录。'
+                                '未配置时壁纸库页会显示引导。'
+                          : '尚未配置。填入你自己部署的 zuno-api 服务地址'
+                                '（部署步骤见 README「后端部署」）；保存后会立即重建目录。',
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,

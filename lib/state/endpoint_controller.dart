@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:zuno/core/zuno_endpoint.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/services/remote_api.dart';
 
 /// 壁纸库地址（后端 base URL）的运行时配置。
 ///
-/// 为什么可配：zuno-api 是自托管的（Worker + D1 + WebDAV），每个人部署的
-/// 域名都不一样；写死在编译期等于每次换后端都要重新发版。
+/// ZUNO 不内置任何云端服务：地址指向用户自己部署的 zuno-api
+/// （Cloudflare Workers 或 Docker 自托管，见 README「后端部署」）。
+/// 未配置时壁纸库显示引导去设置的空态，不会发起任何请求。
 /// 配置落在原生 `zuno_config`（`library.base_url`），与其余设置同一条通道。
 class EndpointController extends ChangeNotifier {
   EndpointController(this._api, this._url);
@@ -17,12 +17,10 @@ class EndpointController extends ChangeNotifier {
 
   String get url => _url;
 
-  /// 编译期默认值（[ZunoEndpoint.base]），用户改坏了可以一键回退。
-  String get defaultUrl => ZunoEndpoint.base;
+  /// 未配置状态（空字符串）。
+  bool get isConfigured => _url.isNotEmpty;
 
-  bool get isDefault => _url == defaultUrl;
-
-  /// 启动时读取；没存过或存的值非法就回落到默认地址。
+  /// 启动时读取；没存过或存的值非法就保持未配置。
   static Future<EndpointController> load(RemoteApi api) async {
     String? stored;
     try {
@@ -30,7 +28,7 @@ class EndpointController extends ChangeNotifier {
     } catch (_) {
       stored = null;
     }
-    final url = normalize(stored) ?? ZunoEndpoint.base;
+    final url = normalize(stored) ?? '';
     api.updateBaseUrl(url);
     return EndpointController(api, url);
   }
@@ -61,5 +59,14 @@ class EndpointController extends ChangeNotifier {
     return null;
   }
 
-  Future<String?> resetToDefault() => setUrl(defaultUrl);
+  /// 清空地址回到未配置状态。绕过 [setUrl] 的非空校验：
+  /// 「填错了想暂时停用」是合法操作，壁纸库会显示引导空态。
+  Future<void> clearUrl() async {
+    if (_url.isEmpty) return;
+    // 与 [setUrl] 相同的写入顺序：先原生后内存，保证两端一致。
+    await ZunoNative.setLibraryUrl('');
+    _url = '';
+    _api.updateBaseUrl('');
+    notifyListeners();
+  }
 }

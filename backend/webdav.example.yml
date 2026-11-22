@@ -1,0 +1,29 @@
+# WebDAV 服务配置（hacdias/webdav v5）。
+# 使用：cp webdav.example.yml webdav.yml，再 docker compose up -d。
+# 账号密码由 docker-compose.yml 从 .env 注入（{env} 语法），不要把真实
+# 密码写进这个文件。
+
+# 0.0.0.0:6065 —— compose 内 zuno-api 容器经 http://webdav:6065 访问；
+# 宿主机映射 6065:6065 供桌面管理端直传。
+address: 0.0.0.0
+port: 6065
+
+# WebDAV 根目录 = 卷 zuno-dav 挂载点。ZUNO 约定：
+#   /data/packages/<id>/<version>/<id>-<version>.zuno
+#   /data/covers/<id>.png
+directory: /data
+
+# 默认只读；两个账号各自显式声明权限。
+permissions: R
+
+users:
+  # 桌面管理端：上传/删除需要完整权限（Create/Read/Update/Delete）。
+  - username: admin
+    password: "{env}WEBDAV_ADMIN_PASSWORD"
+    permissions: CRUD
+
+  # zuno-api Worker：只读。Worker 对 WebDAV 严格只读（上传/删除都走管理端），
+  # 泄露这组凭据也改不了任何文件。
+  - username: zuno-api
+    password: "{env}WEBDAV_API_PASSWORD"
+    permissions: R

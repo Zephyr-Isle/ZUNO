@@ -5,17 +5,21 @@ import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/home_screen.dart';
 import 'package:zuno/ui/screens/settings_screen.dart';
 import 'package:zuno/ui/screens/wallpaper_library_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
+import 'package:zuno/ui/widgets/shell_metrics.dart';
 
 /// 主壳：两页签 + 统一的液态玻璃导航栏/底部 TAB。
 ///
 /// 页面本身不再各自持有 `GlassScaffold`，只提供 body；顶部标题和底部
 /// `GlassTabBar.bottom` 由这里统一提供，切换页签时底部栏位置保持稳定。
+/// 底部 TAB 默认隐藏（[ShellPrefsController]）：顶栏按钮接管页签切换，
+/// 「设置 → 界面」里可重新打开。
 ///
 /// 账号页已从主导航移除：下载改为匿名可用后，账号不再是使用壁纸库的
 /// 前提。相关页面（AuthScreen / ProfileScreen）保留但不挂载，需要时
@@ -27,12 +31,14 @@ class MainShellScreen extends StatefulWidget {
     required this.themeController,
     required this.catalog,
     required this.endpoint,
+    required this.shellPrefs,
   });
 
   final LibraryController controller;
   final ThemeController themeController;
   final CatalogController catalog;
   final EndpointController endpoint;
+  final ShellPrefsController shellPrefs;
 
   @override
   State<MainShellScreen> createState() => _MainShellScreenState();
@@ -113,7 +119,7 @@ class _MainShellScreenState extends State<MainShellScreen>
     }
   }
 
-  /// 打开设置页。壁纸库地址、外观、解码方式都在这里，两处入口共用。
+  /// 打开设置页。壁纸库地址、外观、界面、解码方式都在这里，两处入口共用。
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -121,6 +127,7 @@ class _MainShellScreenState extends State<MainShellScreen>
           themeController: widget.themeController,
           endpoint: widget.endpoint,
           catalog: widget.catalog,
+          shellPrefs: widget.shellPrefs,
         ),
       ),
     );
@@ -197,97 +204,177 @@ class _MainShellScreenState extends State<MainShellScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return lgw.GlassScaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      statusBarStyle: zunoStatusBarStyle(context),
-      // 内容滚动到玻璃栏下方并用 iOS 26/27 的 soft 边缘淡出收尾
-      // （extendBody:false 时包不会启用边缘淡出，内容会在栏边界被硬切，
-      // 文字被拦腰截断）。页面自己的滚动视图负责补出 app bar / TAB 的高度。
-      extendBody: true,
-      appBar: lgw.GlassAppBar(
-        title: Text(_titles[_selectedIndex]),
-        centerTitle: true,
-        actions: [
-          // 刷新只对“壁纸库”有意义：目录是远端数据，另一页是本地状态。
-          if (_selectedIndex == 1) ...[
-            GlassCircleButton(
-              icon: AppIcons.refresh,
-              semanticLabel: '刷新壁纸库',
-              onPressed: widget.catalog.refresh,
-            ),
-            const SizedBox(width: 8),
-          ],
-          GlassCircleButton(
-            icon: AppIcons.settings,
-            semanticLabel: '设置',
-            onPressed: () => _openSettings(context),
-          ),
-        ],
-      ),
-      body: Material(
-        // GlassScaffold 是 Cupertino 骨架，给 Material 控件补 ancestor。
-        type: MaterialType.transparency,
-        // 只挂载当前页签。绝不能用 IndexedStack 保活两页：未选中页加入
-        // 页面级玻璃层（GlassPage 的 AdaptiveLiquidGlassLayer）的 premium
-        // 玻璃面（GlassContainer.card / GlassButton）会被该层整体绘制，
-        // 不受 IndexedStack 只画选中子项的约束 —— 另一页的玻璃卡片/按钮
-        // 会“穿透”叠在当前页上（幽灵组件），滚动时看着像部分组件变形。
-        // useOwnLayer: true 的控件不受影响，但逐个加 ownLayer 既贵又易漏。
-        child: _selectedIndex == 0
-            ? HomeScreen(controller: widget.controller)
-            : WallpaperLibraryScreen(
-                catalog: widget.catalog,
-                library: widget.controller,
-                onOpenSettings: () => _openSettings(context),
+    // shellPrefs（TAB 显隐）与 endpoint（壁纸库地址）都可能在设置页里被改，
+    // 回到壳层时这两处状态要立即反映：合并监听，任一 notify 都整壳重建。
+    return ListenableBuilder(
+      listenable: Listenable.merge([widget.shellPrefs, widget.endpoint]),
+      builder: (context, _) {
+        final tabBarVisible = widget.shellPrefs.showTabBar;
+        return lgw.GlassScaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          statusBarStyle: zunoStatusBarStyle(context),
+          // 内容滚动到玻璃栏下方并用 iOS 26/27 的 soft 边缘淡出收尾
+          // （extendBody:false 时包不会启用边缘淡出，内容会在栏边界被硬切，
+          // 文字被拦腰截断）。页面自己的滚动视图负责补出 app bar / TAB 的高度。
+          extendBody: true,
+          appBar: lgw.GlassAppBar(
+            title: Text(_titles[_selectedIndex]),
+            centerTitle: true,
+            actions: [
+              // 底部 TAB 隐藏时，顶栏按钮接管页签切换：本页图标指向另一页。
+              if (!tabBarVisible) ...[
+                GlassCircleButton(
+                  icon: _selectedIndex == 0 ? AppIcons.grid : AppIcons.photo,
+                  semanticLabel: _selectedIndex == 0 ? '打开壁纸库' : '返回我的壁纸',
+                  onPressed: () => setState(
+                    () => _selectedIndex = _selectedIndex == 0 ? 1 : 0,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              // 刷新只对“壁纸库”有意义：目录是远端数据，另一页是本地状态。
+              if (_selectedIndex == 1) ...[
+                GlassCircleButton(
+                  icon: AppIcons.refresh,
+                  semanticLabel: '刷新壁纸库',
+                  onPressed: widget.catalog.refresh,
+                ),
+                const SizedBox(width: 8),
+              ],
+              GlassCircleButton(
+                icon: AppIcons.settings,
+                semanticLabel: '设置',
+                onPressed: () => _openSettings(context),
               ),
-      ),
-      bottomBar: lgw.GlassTabBar.bottom(
-        tabs: [
-          // 选中前后共用同一字形：HugeIcons 只有 stroke 描边风格，
-          // 若用两个字形模拟选中态，切换页签时图标会“变形”。
-          // 选中态只靠颜色（primary vs onSurfaceVariant）+ 标签字重区分。
-          lgw.GlassTab(icon: appIcon(AppIcons.photo), label: '我的壁纸'),
-          lgw.GlassTab(icon: appIcon(AppIcons.grid), label: '壁纸库'),
-        ],
-        selectedIndex: _selectedIndex,
-        onTabSelected: (index) => setState(() => _selectedIndex = index),
-        selectedIconColor: scheme.primary,
-        unselectedIconColor: scheme.onSurfaceVariant,
-        selectedLabelColor: scheme.primary,
-        unselectedLabelColor: scheme.onSurfaceVariant,
-        // 屏蔽模拟器系统拼写检查给 TAB 文字画的黄色下划线。
-        // 注意：这些 style 会整体替换包内默认样式，必须显式带回 11px。
-        textStyle: const TextStyle(
-          fontSize: 11,
-          decoration: TextDecoration.none,
+            ],
+          ),
+          body: Material(
+            // GlassScaffold 是 Cupertino 骨架，给 Material 控件补 ancestor。
+            type: MaterialType.transparency,
+            // 只挂载当前页签。绝不能用 IndexedStack 保活两页：未选中页加入
+            // 页面级玻璃层（GlassPage 的 AdaptiveLiquidGlassLayer）的 premium
+            // 玻璃面（GlassContainer.card / GlassButton）会被该层整体绘制，
+            // 不受 IndexedStack 只画选中子项的约束 —— 另一页的玻璃卡片/按钮
+            // 会“穿透”叠在当前页上（幽灵组件），滚动时看着像部分组件变形。
+            // useOwnLayer: true 的控件不受影响，但逐个加 ownLayer 既贵又易漏。
+            child: _selectedIndex == 0
+                ? HomeScreen(
+                    controller: widget.controller,
+                    tabBarVisible: tabBarVisible,
+                  )
+                // 未配置后端地址时不挂载壁纸库页：避免对空 URL 发请求，
+                // 先引导去设置页填写（地址保存在原生 zuno_config）。
+                : !widget.endpoint.isConfigured
+                ? _LibraryNotConfigured(
+                    onOpenSettings: () => _openSettings(context),
+                  )
+                : WallpaperLibraryScreen(
+                    catalog: widget.catalog,
+                    library: widget.controller,
+                    onOpenSettings: () => _openSettings(context),
+                    tabBarVisible: tabBarVisible,
+                  ),
+          ),
+          bottomBar: !tabBarVisible
+              ? null
+              : lgw.GlassTabBar.bottom(
+                  tabs: [
+                    // 选中前后共用同一字形：HugeIcons 只有 stroke 描边风格，
+                    // 若用两个字形模拟选中态，切换页签时图标会“变形”。
+                    // 选中态只靠颜色（primary vs onSurfaceVariant）+ 标签字重区分。
+                    lgw.GlassTab(icon: appIcon(AppIcons.photo), label: '我的壁纸'),
+                    lgw.GlassTab(icon: appIcon(AppIcons.grid), label: '壁纸库'),
+                  ],
+                  selectedIndex: _selectedIndex,
+                  onTabSelected: (index) =>
+                      setState(() => _selectedIndex = index),
+                  selectedIconColor: scheme.primary,
+                  unselectedIconColor: scheme.onSurfaceVariant,
+                  selectedLabelColor: scheme.primary,
+                  unselectedLabelColor: scheme.onSurfaceVariant,
+                  // 屏蔽模拟器系统拼写检查给 TAB 文字画的黄色下划线。
+                  // 注意：这些 style 会整体替换包内默认样式，必须显式带回 11px。
+                  textStyle: const TextStyle(
+                    fontSize: 11,
+                    decoration: TextDecoration.none,
+                  ),
+                  selectedLabelStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.none,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontSize: 11,
+                    decoration: TextDecoration.none,
+                  ),
+                  quality: lgw.GlassQuality.premium,
+                  // Apple 的悬浮 TAB 是真正的胶囊：用包的 capsule 哨兵值，玻璃着色器
+                  // 会把圆角钳到高度的一半，拖动/按压膨胀时也始终是椭圆端，不会变成
+                  // 一个圆角矩形。选中指示块用同一个值（水滴两端也是半椭圆），
+                  // 否则拖动时胶囊条里会出现一块方角高光。
+                  barBorderRadius: lgw.GlassDefaults.capsuleRadius,
+                  barHeight: 66,
+                  spacing: 10,
+                  horizontalPadding: 22,
+                  verticalPadding: 18,
+                  indicatorBorderRadius: lgw.GlassDefaults.capsuleRadius,
+                  indicatorExpansion: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
+                  indicatorPinchStrength: 0.5,
+                  // 选中项图标轻微抬起，和 iOS 的 tab magnification 一致。
+                  magnification: 1.05,
+                ),
+        );
+      },
+    );
+  }
+}
+
+/// 壁纸库未配置空态：ZUNO 不内置云端服务，地址指向用户自己部署的
+/// zuno-api。这里只引导去设置页填写，不发起任何网络请求。
+class _LibraryNotConfigured extends StatelessWidget {
+  const _LibraryNotConfigured({required this.onOpenSettings});
+
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final clearBottom =
+        shellBottomClearance(context, tabBarVisible: false) + 24;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(32, 32, 32, clearBottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            appIcon(AppIcons.cloud, size: 64, color: theme.colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('壁纸库未配置', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 10),
+            Text(
+              '壁纸库指向你自己部署的 zuno-api 后端'
+              '（Docker 或 Cloudflare Workers，见 README 的部署章节）。'
+              '到「设置 → 壁纸库地址」填入服务地址即可开始使用。',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: 220,
+              child: GlassPrimaryButton(
+                icon: AppIcons.settings,
+                label: '去设置',
+                onPressed: onOpenSettings,
+              ),
+            ),
+          ],
         ),
-        selectedLabelStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          decoration: TextDecoration.none,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 11,
-          decoration: TextDecoration.none,
-        ),
-        quality: lgw.GlassQuality.premium,
-        // Apple 的悬浮 TAB 是真正的胶囊：用包的 capsule 哨兵值，玻璃着色器
-        // 会把圆角钳到高度的一半，拖动/按压膨胀时也始终是椭圆端，不会变成
-        // 一个圆角矩形。选中指示块用同一个值（水滴两端也是半椭圆），
-        // 否则拖动时胶囊条里会出现一块方角高光。
-        barBorderRadius: lgw.GlassDefaults.capsuleRadius,
-        barHeight: 66,
-        spacing: 10,
-        horizontalPadding: 22,
-        verticalPadding: 18,
-        indicatorBorderRadius: lgw.GlassDefaults.capsuleRadius,
-        indicatorExpansion: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 9,
-        ),
-        indicatorPinchStrength: 0.5,
-        // 选中项图标轻微抬起，和 iOS 的 tab magnification 一致。
-        magnification: 1.05,
       ),
     );
   }

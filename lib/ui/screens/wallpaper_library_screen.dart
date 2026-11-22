@@ -6,6 +6,7 @@ import 'package:zuno/ui/screens/remote_wallpaper_detail_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
 import 'package:zuno/ui/widgets/remote_package_card.dart';
+import 'package:zuno/ui/widgets/shell_metrics.dart';
 
 /// “壁纸库”页：浏览云端目录，直接下载导入（无需登录）。
 ///
@@ -17,6 +18,7 @@ class WallpaperLibraryScreen extends StatefulWidget {
     required this.catalog,
     required this.library,
     required this.onOpenSettings,
+    required this.tabBarVisible,
   });
 
   final CatalogController catalog;
@@ -24,6 +26,9 @@ class WallpaperLibraryScreen extends StatefulWidget {
 
   /// 空库/连不上时的引导：后端地址在设置页里改。
   final VoidCallback onOpenSettings;
+
+  /// 外壳当前是否显示底部玻璃 TAB：决定列表与空态的底部净空。
+  final bool tabBarVisible;
 
   @override
   State<WallpaperLibraryScreen> createState() => _WallpaperLibraryScreenState();
@@ -66,7 +71,10 @@ class _WallpaperLibraryScreenState extends State<WallpaperLibraryScreen> {
     // （barHeight 66 + verticalPadding 18×2 + 底部安全区）。
     final mediaQuery = MediaQuery.of(context);
     final topClear = mediaQuery.padding.top + 44 + 12;
-    final bottomClear = 102.0 + mediaQuery.padding.bottom;
+    final bottomClear = shellBottomClearance(
+      context,
+      tabBarVisible: widget.tabBarVisible,
+    );
     return ListenableBuilder(
       listenable: Listenable.merge([widget.catalog, widget.library]),
       builder: (context, _) {
@@ -87,24 +95,27 @@ class _WallpaperLibraryScreenState extends State<WallpaperLibraryScreen> {
                   message: catalog.error!,
                   onRetry: catalog.refresh,
                   onOpenSettings: widget.onOpenSettings,
+                  bottomClear: bottomClear,
                 ),
               )
             else if (catalog.items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: _EmptyState(onOpenSettings: widget.onOpenSettings),
+                child: _EmptyState(
+                  onOpenSettings: widget.onOpenSettings,
+                  bottomClear: bottomClear,
+                ),
               )
             else ...[
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(16, topClear, 16, 8),
                 sliver: SliverGrid.builder(
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 210,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 0.62,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 210,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.62,
+                  ),
                   itemCount: catalog.items.length,
                   itemBuilder: (context, index) {
                     final item = catalog.items[index];
@@ -193,16 +204,19 @@ class _Footer extends StatelessWidget {
 /// 空库：最常见的两种情况是「后端还没同步」和「地址填错了」，
 /// 所以文案把两条路都指出来，并直接给一个进设置页的入口。
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onOpenSettings});
+  const _EmptyState({required this.onOpenSettings, required this.bottomClear});
 
   final VoidCallback onOpenSettings;
+
+  /// 底部净空（玻璃 TAB + 安全区，或 TAB 隐藏时的安全区 + 余量）。
+  final double bottomClear;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // SliverFillRemaining 在整屏（extendBody）里居中：底部让出玻璃 TAB，
     // 文案和按钮才不会撞在 TAB 上。
-    final clearBottom = 102.0 + MediaQuery.paddingOf(context).bottom + 24;
+    final clearBottom = bottomClear + 24;
     return Center(
       child: Padding(
         padding: EdgeInsets.fromLTRB(32, 32, 32, clearBottom),
@@ -244,16 +258,20 @@ class _ErrorState extends StatelessWidget {
     required this.message,
     required this.onRetry,
     required this.onOpenSettings,
+    required this.bottomClear,
   });
 
   final String message;
   final VoidCallback onRetry;
   final VoidCallback onOpenSettings;
 
+  /// 底部净空（玻璃 TAB + 安全区，或 TAB 隐藏时的安全区 + 余量）。
+  final double bottomClear;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final clearBottom = 102.0 + MediaQuery.paddingOf(context).bottom + 24;
+    final clearBottom = bottomClear + 24;
     return Center(
       child: Padding(
         padding: EdgeInsets.fromLTRB(32, 32, 32, clearBottom),

@@ -1,0 +1,10 @@
+node_modules
+selfhost/dist
+.wrangler
+.wrangler-build
+.dev.vars
+wrangler.toml
+.env
+Dockerfile
+docker-compose.yml
+webdav.yml

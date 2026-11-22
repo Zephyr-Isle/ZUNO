@@ -1,6 +1,6 @@
 //! WebDAV 写入：只给管理端用。Worker 对 WebDAV 只读，上传绝不经过 Worker。
 //!
-//! 上传布局严格按 docs/backend.md：`packages/<id>/<version>/<file>.zuno`
+//! 上传布局严格按 internal-docs/docs/backend.md：`packages/<id>/<version>/<file>.zuno`
 //! 与 `covers/<id>.<ext>`。
 use std::{fs, path::Path};
 

@@ -57,3 +57,46 @@ app.*.map.json
 android/.kotlin/
 android/hs_err_pid*.log
 android/captures/
+
+# 不随仓库发布的开发 / 协作文档（只保留根目录 README.md）
+internal-docs/
+
+# 本地工具数据（WorkBuddy 会话、缓存等，不是项目源码）
+.workbuddy-ai/
+.agents/
+.cloud-attachments/
+.dart_tool/
+.pub_cache/
+.gradle/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+
+# 各子工程的依赖、构建产物与临时文件
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/target/
+**/gen/
+**/.wrangler/
+**/.wrangler-build/
+**/.tmp-dav/
+
+# 本地配置与密钥（.example 模板仍会入库）
+**/.dev.vars
+**/wrangler.toml
+**/local.properties
+**/key.properties
+**/*.keystore
+**/*.jks
+
+# 自托管产物与真实配置（webdav.yml / .env 含真实密码，.example 模板仍入库）
+backend/.env
+backend/webdav.yml
+backend/selfhost/dist/
+backend/.tmp-selfhost/
+backend/data/
+
+# 本地 agent 工作目录
+.zcode/

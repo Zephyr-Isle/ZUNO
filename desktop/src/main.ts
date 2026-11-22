@@ -96,7 +96,8 @@ app.innerHTML = `
 `;
 
 let config: Config = {
-  apiBase: "https://zuno-api.zephyrisle.qzz.io",
+  // ZUNO 不内置云端服务：地址在设置里填自己部署的 zuno-api。
+  apiBase: "",
   adminSecret: "",
   webdavBase: "",
   webdavUser: "",

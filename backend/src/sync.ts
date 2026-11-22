@@ -171,7 +171,7 @@ export async function handleAdminSync(request: Request, env: Env): Promise<Respo
     for (const versionDir of versions) {
       let files: DavEntry[];
       try {
-        // README §2：.zuno 与 .zip 都是合法 ZIP 容器，两种都要收录。
+        // internal-docs/docs/package-format.md：.zuno 与 .zip 都是合法 ZIP 容器，两种都要收录。
         files = (await propfind(env, versionDir.path, '1')).filter(
           (entry) =>
             !entry.isDir &&

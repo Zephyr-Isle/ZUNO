@@ -5,7 +5,7 @@
 //! - `timed`：父包自身不渲染，跳过（客户端显示占位图标）。
 //!
 //! 任何一步失败都只返回 `None`，绝不阻断打包；包内没有预览图时客户端
-//! 导入器会自动补一张（见 README §5 第 9 条）。
+//! 导入器会自动补一张（见 internal-docs/docs/platform-notes.md 第 9 条）。
 use std::{
     fs,
     path::{Path, PathBuf},

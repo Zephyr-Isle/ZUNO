@@ -82,7 +82,7 @@ export async function readManifestFromWebdav(
     const nameBytes = central.subarray(cursor + 46, cursor + 46 + nameLength);
     const name = new TextDecoder().decode(nameBytes);
 
-    // 根目录或单一顶层文件夹内的 manifest.json（README §2 允许两种布局）。
+    // 根目录或单一顶层文件夹内的 manifest.json（internal-docs/docs/package-format.md 允许两种布局）。
     const isManifest = name === 'manifest.json' || /^[^/]+\/manifest\.json$/.test(name);
     if (
       isManifest &&

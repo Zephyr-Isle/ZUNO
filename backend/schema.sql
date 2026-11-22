@@ -1,4 +1,4 @@
--- 与 docs/backend.md §3 一致：用户、会话、壁纸元数据、下载记录。
+-- 与 internal-docs/docs/backend.md §3 一致：用户、会话、壁纸元数据、下载记录。
 -- 初始化：npm run db:init:local / npm run db:init:remote
 
 CREATE TABLE users (

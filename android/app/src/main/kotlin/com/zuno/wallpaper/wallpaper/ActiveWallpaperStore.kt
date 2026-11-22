@@ -49,8 +49,11 @@ object ActiveWallpaperStore {
     private const val KEY_TIMED_LAST_SWITCH = "timed.last_switch"
     private const val KEY_THEME_MODE = "app.theme_mode"
 
-    /** 壁纸库后端地址；未设置时客户端回落到编译期默认值。 */
+    /** 壁纸库后端地址；ZUNO 不内置云端服务，地址由用户在设置页填写。 */
     private const val KEY_LIBRARY_URL = "library.base_url"
+
+    /** 主界面底部玻璃 TAB 是否显示（默认隐藏，顶栏按钮提供页面切换入口）。 */
+    private const val KEY_SHOW_TAB_BAR = "app.show_tab_bar"
 
     /** 视频解码方式：auto | hardware | software（默认 auto = 硬件优先）。 */
     private const val KEY_VIDEO_DECODE_MODE = "video.decode_mode"
@@ -127,6 +130,14 @@ object ActiveWallpaperStore {
 
     fun setLibraryUrl(context: Context, url: String) {
         prefs(context).edit().putString(KEY_LIBRARY_URL, url).apply()
+    }
+
+    /** 底部玻璃 TAB 显隐；默认隐藏（顶栏按钮切换「我的壁纸 / 壁纸库」）。 */
+    fun showTabBar(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHOW_TAB_BAR, false)
+
+    fun setShowTabBar(context: Context, visible: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SHOW_TAB_BAR, visible).apply()
     }
 
     fun setTimedLastSwitch(context: Context, atMillis: Long) {

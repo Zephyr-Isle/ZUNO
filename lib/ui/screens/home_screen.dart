@@ -6,6 +6,7 @@ import 'package:zuno/ui/screens/wallpaper_detail_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
 import 'package:zuno/ui/widgets/package_card.dart';
+import 'package:zuno/ui/widgets/shell_metrics.dart';
 import 'package:zuno/wallpaper_package/validation_failure.dart';
 
 /// “我的壁纸”页：网格展示已安装的 ZUNO 包，悬浮玻璃按钮触发 ZIP/.zuno 导入。
@@ -13,9 +14,16 @@ import 'package:zuno/wallpaper_package/validation_failure.dart';
 /// 顶部导航栏与底部 TAB 由 [MainShellScreen] 统一提供；本页只输出 body。
 /// 导入按钮固定在 body 底部（外壳已把 body 裁在 TAB 上方），滚动时不动。
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.controller});
+  const HomeScreen({
+    super.key,
+    required this.controller,
+    required this.tabBarVisible,
+  });
 
   final LibraryController controller;
+
+  /// 外壳当前是否显示底部玻璃 TAB：决定导入按钮和列表的底部净空。
+  final bool tabBarVisible;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -158,9 +166,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // 由外壳的 soft 边缘淡出收尾。这里用 MediaQuery 补出两根栏的高度，
     // 让首屏内容落在栏外；悬浮 CTA 钉在玻璃 TAB 上方，滚动时不动。
     final mediaQuery = MediaQuery.of(context);
-    // GlassTabBar.bottom：barHeight 66 + verticalPadding 18×2 = 102，
-    // 外壳再叠加底部安全区（Android 手势条）。
-    final bottomBarTotal = 102.0 + mediaQuery.padding.bottom;
+    // 底部净空由外壳状态决定：TAB 可见时让出玻璃栏 + 安全区，隐藏时只
+    // 让出安全区（度量集中在 shell_metrics.dart，壁纸库页共用同一份）。
+    final bottomBarTotal = shellBottomClearance(
+      context,
+      tabBarVisible: widget.tabBarVisible,
+    );
     return Stack(
       children: [
         Positioned.fill(

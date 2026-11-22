@@ -1,6 +1,6 @@
 //! `.zuno` / `.zip` 包处理：校验、算 checksum、本地压缩、安全解压预览。
 //!
-//! README §2：两种扩展名本质都是 ZIP 容器；`checksum` 覆盖 `content/`
+//! internal-docs/docs/package-format.md：两种扩展名本质都是 ZIP 容器；`checksum` 覆盖 `content/`
 //! 下全部文件，按相对包根的 POSIX 路径排序后逐段喂进同一个 SHA-256。
 use std::{
     collections::BTreeSet,

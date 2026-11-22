@@ -251,6 +251,22 @@ class ZunoNative {
   static Future<void> setLibraryUrl(String url) =>
       _channel.invokeMethod<void>('setLibraryUrl', {'url': url});
 
+  // ------------------------------------------------------------ 界面设置
+  //
+  // 底部玻璃 TAB 的显隐（`app.show_tab_bar`）：默认隐藏，顶栏按钮提供
+  // 「我的壁纸 / 壁纸库」切换入口；设置页里可随时打开。
+
+  static Future<bool> getShowTabBar() async {
+    try {
+      return await _channel.invokeMethod<bool>('getShowTabBar') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<void> setShowTabBar(bool visible) =>
+      _channel.invokeMethod<void>('setShowTabBar', {'visible': visible});
+
   // ------------------------------------------------------------ 账号会话
   //
   // 存在原生 `zuno_auth` prefs（应用私有目录）。为什么不放 D1/远端：
@@ -279,8 +295,7 @@ class ZunoNative {
     'expiresAt': expiresAt,
   });
 
-  static Future<void> clearAuth() =>
-      _channel.invokeMethod<void>('authClear');
+  static Future<void> clearAuth() => _channel.invokeMethod<void>('authClear');
 
   /// 导入后为 video/depth 包自动生成缩略图（原生取视频首帧 / 缩放颜色图）。
   /// 返回生成的 JPEG 路径；失败或类型不支持返回 null（UI 显示占位图标）。

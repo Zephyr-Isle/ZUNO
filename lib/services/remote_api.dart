@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zuno/core/zuno_endpoint.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 
 /// 服务端返回的可展示错误。
@@ -25,7 +24,9 @@ class ApiException implements Exception {
 /// `dart:io` 的 HttpClient 全覆盖，且能直接消费字节流做进度回调，
 /// 少一个依赖就少一处版本冲突。
 class RemoteApi {
-  RemoteApi({String baseUrl = ZunoEndpoint.base}) : baseUrl = _normalize(baseUrl);
+  /// [baseUrl] 默认为空（未配置）：壁纸库页会显示引导去设置的空态，
+  /// 不会用空地址发请求。配置来自用户自己部署的 zuno-api。
+  RemoteApi({String baseUrl = ''}) : baseUrl = _normalize(baseUrl);
 
   /// 末尾不带斜杠。可在运行时通过 [updateBaseUrl] 指向自建后端。
   String baseUrl;
@@ -33,13 +34,13 @@ class RemoteApi {
   static String _normalize(String value) =>
       value.trim().replaceAll(RegExp(r'/+$'), '');
 
-  /// 切换后端地址（设置页保存后调用）。
+  /// 切换后端地址（设置页保存/清除后调用；空字符串 = 未配置）。
   ///
   /// 同时关掉旧连接池：HttpClient 会按 host 复用连接，换域名后继续用旧池
   /// 只会拿到一堆失效 socket。
   void updateBaseUrl(String value) {
     final next = _normalize(value);
-    if (next.isEmpty || next == baseUrl) return;
+    if (next == baseUrl) return;
     baseUrl = next;
     _client?.close(force: true);
     _client = null;
@@ -95,10 +96,7 @@ class RemoteApi {
   Future<CatalogPage> listWallpapers({String? cursor, int limit = 20}) async {
     final query = <String, String>{'limit': '$limit'};
     if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
-    final uri = Uri(
-      path: '/api/wallpapers',
-      queryParameters: query,
-    );
+    final uri = Uri(path: '/api/wallpapers', queryParameters: query);
     final json = await _send('GET', uri.toString());
 
     final rawItems = json['items'];
@@ -114,10 +112,7 @@ class RemoteApi {
         }
       }
     }
-    return CatalogPage(
-      items: items,
-      nextCursor: json['nextCursor'] as String?,
-    );
+    return CatalogPage(items: items, nextCursor: json['nextCursor'] as String?);
   }
 
   // ---------------------------------------------------------------- 下载
@@ -168,7 +163,7 @@ class RemoteApi {
         response.statusCode,
         'download_failed',
         '下载失败（HTTP ${response.statusCode}）'
-        '${body.isEmpty ? '' : '：$body'}',
+            '${body.isEmpty ? '' : '：$body'}',
       );
     }
     final total = response.contentLength > 0 ? response.contentLength : null;
@@ -177,8 +172,7 @@ class RemoteApi {
     try {
       // stall 超时：连接超时只管握手，服务端 accept 后停流会让下载永远卡住。
       // 流上 60s 收不到任何新 chunk 即判定挂死，抛出后由调用方删半截文件。
-      await for (final chunk
-          in response.timeout(const Duration(seconds: 60))) {
+      await for (final chunk in response.timeout(const Duration(seconds: 60))) {
         sink.add(chunk);
         received += chunk.length;
         onProgress?.call(received, total);
@@ -212,7 +206,11 @@ class RemoteApi {
     }
     if (body != null) {
       final bytes = utf8.encode(jsonEncode(body));
-      request.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
+      request.headers.contentType = ContentType(
+        'application',
+        'json',
+        charset: 'utf-8',
+      );
       request.contentLength = bytes.length;
       request.add(bytes);
     }
@@ -221,9 +219,7 @@ class RemoteApi {
     try {
       // 连接超时（15s）只管握手；这里再给「发请求 → 收到响应头」一个整体
       // 超时，服务端 accept 后挂死不回包时目录页才不会永远转圈。
-      response = await request
-          .close()
-          .timeout(const Duration(seconds: 30));
+      response = await request.close().timeout(const Duration(seconds: 30));
     } catch (error) {
       throw ApiException(0, 'network', '请求失败：$error');
     }

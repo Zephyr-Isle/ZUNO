@@ -382,6 +382,18 @@ object ZunoBridge {
                 result.success(true)
             }
 
+            // ---------------------------------------------------------- 界面设置
+            "getShowTabBar" ->
+                result.success(ActiveWallpaperStore.showTabBar(activity))
+
+            "setShowTabBar" -> {
+                ActiveWallpaperStore.setShowTabBar(
+                    activity,
+                    args["visible"] as? Boolean ?: false,
+                )
+                result.success(true)
+            }
+
             // ---------------------------------------------------------- 账号会话
             //
             // token 只做“本地记住登录态”：Dart 侧用完即从内存取出设 HTTP 头，
