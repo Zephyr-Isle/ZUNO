@@ -100,3 +100,6 @@ backend/data/
 
 # 本地 agent 工作目录
 .zcode/
+
+# 冒烟测试临时目录
+backend/.tmp-smoke/
