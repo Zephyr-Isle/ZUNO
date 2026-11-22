@@ -267,6 +267,7 @@ class _MainShellScreenState extends State<MainShellScreen>
                 : !widget.endpoint.isConfigured
                 ? _LibraryNotConfigured(
                     onOpenSettings: () => _openSettings(context),
+                    tabBarVisible: tabBarVisible,
                   )
                 : WallpaperLibraryScreen(
                     catalog: widget.catalog,
@@ -335,15 +336,22 @@ class _MainShellScreenState extends State<MainShellScreen>
 /// 壁纸库未配置空态：ZUNO 不内置云端服务，地址指向用户自己部署的
 /// zuno-api。这里只引导去设置页填写，不发起任何网络请求。
 class _LibraryNotConfigured extends StatelessWidget {
-  const _LibraryNotConfigured({required this.onOpenSettings});
+  const _LibraryNotConfigured({
+    required this.onOpenSettings,
+    required this.tabBarVisible,
+  });
 
   final VoidCallback onOpenSettings;
+
+  /// 外壳当前是否显示底部玻璃 TAB：净空必须跟随实际值，否则开着
+  /// 底部栏时空态的按钮会被玻璃栏压住。
+  final bool tabBarVisible;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final clearBottom =
-        shellBottomClearance(context, tabBarVisible: false) + 24;
+        shellBottomClearance(context, tabBarVisible: tabBarVisible) + 24;
     return Center(
       child: Padding(
         padding: EdgeInsets.fromLTRB(32, 32, 32, clearBottom),
