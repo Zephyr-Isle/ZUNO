@@ -69,14 +69,15 @@ class LibraryController extends ChangeNotifier {
   /// 后台 isolate，返回值通过 Isolate.exit 传输（支持任意对象图）。
   Future<LibraryEntry?> importPackage() async {
     if (_importing) return null;
-    // 只让用户挑 .zuno 壁纸包：file_picker 13.x 静态入口，取消时返回空列表。
-    // 用 FileType.custom + allowedExtensions 按扩展名过滤；少数 ROM 的 SAF 会
-    // 禁用自定义扩展名条目，此时仍可切到“文件”视图选择。选择层的过滤只是
-    // 体验优化，真正的安全边界是下面 Isolate 里的完整内容校验（路径遍历 /
-    // manifest / checksum），非法文件照样会在导入阶段被拒绝并给出原因。
+    // 让用户挑 .zuno / .zip（.zuno 本质是 ZIP，桌面管理端同样两种都列出；
+    // 有的包作者会以 .zip 分发）。file_picker 13.x 静态入口，取消时返回空
+    // 列表。用 FileType.custom + allowedExtensions 按扩展名过滤；少数 ROM
+    // 的 SAF 会禁用自定义扩展名条目，此时仍可切到“文件”视图选择。选择层
+    // 的过滤只是体验优化，真正的安全边界是下面 Isolate 里的完整内容校验
+    // （路径遍历 / manifest / checksum），非法文件照样会被拒绝并给出原因。
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['zuno'],
+      allowedExtensions: ['zuno', 'zip'],
     );
     final path = files.isNotEmpty ? files.first.path : null;
     if (path == null) {
