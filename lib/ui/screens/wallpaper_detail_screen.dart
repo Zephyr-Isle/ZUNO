@@ -45,8 +45,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   /// 预览切换后的 slot id（用于标签展示）。
   String? _previewSlotId;
 
+  /// 在途的 timed 预览任务：dispose 的恢复动作必须等它落地后再发。
+  /// 否则预览的 setActiveWallpaper 可能晚于恢复写入——壁纸停留在模拟时段，
+  /// 要等 WorkManager 下次调度检查（最长 15 分钟）才回正。
+  Future<void>? _inFlightPreview;
+
   /// “正在打包”常驻 toast 的关闭句柄（导出完成/失败/离开页面时收起）。
   VoidCallback? _packingToast;
+
+  /// 导出重入保护：连点两次会并发跑两个流式导出，共用一个 _packingToast
+  /// 句柄互相收掉对方的提示，还会叠出两个分享面板。
+  bool _sharing = false;
+
+  /// 激活配置装载任务：_apply 必须等它完成（见 _loadAppliedConfig 注释）。
+  Future<void>? _configLoadFuture;
 
   @override
   void dispose() {
@@ -56,8 +68,19 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
     // 离开详情页立即把时段恢复为设备实际时间：预览语义是“临时的”，
     // 此前要等 WorkManager 下次调度检查（最长 15 分钟）才回正。
     // fire-and-forget——controller 生命周期长于本页，恢复不依赖页面存活。
+    // 若有在途预览，必须串在其后：恢复先写入、预览后写入的话，壁纸会
+    // 停留在用户刚拖动的模拟时段。
     if (_previewMinutes != null) {
-      widget.controller.restoreTimedSlotNow(widget.entry);
+      final entry = widget.entry;
+      final controller = widget.controller;
+      final pending = _inFlightPreview;
+      if (pending == null) {
+        controller.restoreTimedSlotNow(entry);
+      } else {
+        unawaited(
+          pending.whenComplete(() => controller.restoreTimedSlotNow(entry)),
+        );
+      }
     }
     super.dispose();
   }
@@ -73,7 +96,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
     // 已应用过的壁纸：以激活记录里保存的用户配置为初始值。
     // 否则每次打开详情页滑杆都显示 manifest 默认值，用户点“应用”会
     // 把之前调好的参数静默覆盖回默认。
-    _loadAppliedConfig();
+    _configLoadFuture = _loadAppliedConfig();
     // controller 状态变化（apply 后激活记录刷新）驱动重建：timed 预览滑杆的
     // 可用性依赖 isEntryActive，不监听会出现“在本页应用成功后滑杆仍禁用”，
     // 直到下一次任意 setState 才恢复。
@@ -119,6 +142,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   }
 
   Future<void> _apply() async {
+    // 配置装载是异步的（激活记录走 platform channel）：装载完成前点“应用”
+    // 会把 manifest 默认值写进激活记录，覆盖用户之前调好的参数，而随后的
+    // setState 又让滑杆显示出“并未真正生效”的值。装载通常瞬间完成，
+    // 这里只是把极端时序（进页面立即点击）关在门外。
+    await _configLoadFuture;
+    if (!mounted) return;
     final error = await widget.controller.apply(widget.entry, _configValues);
     if (!mounted) return;
     lgw.GlassToast.show(
@@ -138,40 +167,46 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   }
 
   Future<void> _share() async {
-    _dismissPackingToast();
-    _packingToast = lgw.GlassToast.show(
-      context,
-      message: '正在打包壁纸包（流式导出）…',
-      type: lgw.GlassToastType.info,
-      duration: Duration.zero, // 大视频包打包耗时不可预估，完成后手动收起。
-      dismissible: false,
-    );
-    final String? path;
+    if (_sharing) return;
+    _sharing = true;
     try {
-      path = await widget.controller.exportEntry(widget.entry);
-    } finally {
       _dismissPackingToast();
-    }
-    if (!mounted) return;
-    if (path == null) {
-      lgw.GlassToast.show(
+      _packingToast = lgw.GlassToast.show(
         context,
-        message: '导出失败',
-        type: lgw.GlassToastType.error,
+        message: '正在打包壁纸包（流式导出）…',
+        type: lgw.GlassToastType.info,
+        duration: Duration.zero, // 大视频包打包耗时不可预估，完成后手动收起。
+        dismissible: false,
       );
-      return;
-    }
-    final launched = await ZunoNative.sharePackage(
-      path: path,
-      title: widget.entry.title,
-    );
-    if (!mounted) return;
-    if (!launched) {
-      lgw.GlassToast.show(
-        context,
-        message: '已导出到：$path',
-        type: lgw.GlassToastType.success,
+      final String? path;
+      try {
+        path = await widget.controller.exportEntry(widget.entry);
+      } finally {
+        _dismissPackingToast();
+      }
+      if (!mounted) return;
+      if (path == null) {
+        lgw.GlassToast.show(
+          context,
+          message: '导出失败',
+          type: lgw.GlassToastType.error,
+        );
+        return;
+      }
+      final launched = await ZunoNative.sharePackage(
+        path: path,
+        title: widget.entry.title,
       );
+      if (!mounted) return;
+      if (!launched) {
+        lgw.GlassToast.show(
+          context,
+          message: '已导出到：$path',
+          type: lgw.GlassToastType.success,
+        );
+      }
+    } finally {
+      _sharing = false;
     }
   }
 
@@ -718,17 +753,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
 
   void _applyPreviewSlot(int minutes) {
     _previewDebounce?.cancel();
-    _previewDebounce = Timer(const Duration(milliseconds: 300), () async {
-      try {
-        final slotId = await widget.controller.previewTimedSlot(
-          widget.entry,
-          minutes,
-        );
-        if (!mounted) return;
-        setState(() => _previewSlotId = slotId);
-      } catch (_) {
-        // 预览失败静默处理（下一次拖动会重试）。
-      }
+    _previewDebounce = Timer(const Duration(milliseconds: 300), () {
+      final task = () async {
+        try {
+          final slotId = await widget.controller.previewTimedSlot(
+            widget.entry,
+            minutes,
+          );
+          if (!mounted) return;
+          setState(() => _previewSlotId = slotId);
+        } catch (_) {
+          // 预览失败静默处理（下一次拖动会重试）。
+        }
+      }();
+      _inFlightPreview = task;
     });
   }
 

@@ -68,7 +68,6 @@ class LibraryController extends ChangeNotifier {
   /// （规格明确要求在 isolate 中解压）。compute 会把闭包与参数一并投到
   /// 后台 isolate，返回值通过 Isolate.exit 传输（支持任意对象图）。
   Future<LibraryEntry?> importPackage() async {
-    if (_importing) return null;
     // 让用户挑 .zuno / .zip（.zuno 本质是 ZIP，桌面管理端同样两种都列出；
     // 有的包作者会以 .zip 分发）。file_picker 13.x 静态入口，取消时返回空
     // 列表。用 FileType.custom + allowedExtensions 按扩展名过滤；少数 ROM
@@ -89,12 +88,24 @@ class LibraryController extends ChangeNotifier {
     return importFromPath(path);
   }
 
+  /// 导入串行链：所有导入（手动选择 / 云端下载完成后）排在同一条链上依次
+  /// 执行。此前并发触发（下载完成时用户恰好也在手动导入）第二个会直接
+  /// 返回 null——远端详情页拿不到条目还会把刚下载的整包删掉，重试要再付
+  /// 一次完整下载的流量；排队则让已下载的包自然被消费。
+  Future<LibraryEntry?> _importChain = Future.value(null);
+
   /// 从已知路径导入（在线壁纸库下载完成后走这里）。
   ///
   /// 和 [importPackage] 共用同一套 isolate 校验：下载来的包同样可能损坏，
   /// 不能因为“来自自家服务器”就跳过路径遍历 / manifest / checksum 检查。
-  Future<LibraryEntry?> importFromPath(String path) async {
-    if (_importing) return null;
+  Future<LibraryEntry?> importFromPath(String path) {
+    final task = _importChain.then((_) => _importNow(path));
+    // 链不能被单次失败打断：吞掉错误（结果已通过 lastImportResult 暴露）。
+    _importChain = task.then((_) => null, onError: (Object _) => null);
+    return task;
+  }
+
+  Future<LibraryEntry?> _importNow(String path) async {
     _importing = true;
     notifyListeners();
     try {

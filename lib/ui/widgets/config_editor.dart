@@ -176,15 +176,18 @@ class ConfigEditor extends StatelessWidget {
 
 /// hex 颜色串 → Color（非法输入返回灰色占位）。
 /// 提为文件级函数：ConfigEditor 与 _ColorField 都要用。
+/// 输入直接来自 TextField 原文（色块在 build 里解析），非 hex 字符随时可能
+/// 出现——长度恰好 6/8 位但含非法字符时 int.parse 会抛 FormatException，
+/// 在 build 里抛异常会把整个详情页打成 ErrorWidget（连纠正输入的输入框都
+/// 被替换掉）。必须在此兜底，非法输入一律回落占位色。
+final _hexColorPattern = RegExp(r'^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$');
+
 Color _tryParseColor(String hex) {
   final cleaned = hex.replaceFirst('#', '');
-  if (cleaned.length == 6) {
-    return Color(int.parse('FF$cleaned', radix: 16));
-  }
-  if (cleaned.length == 8) {
-    return Color(int.parse(cleaned, radix: 16));
-  }
-  return Colors.grey;
+  if (!_hexColorPattern.hasMatch(cleaned)) return Colors.grey;
+  final value = int.tryParse(cleaned, radix: 16);
+  if (value == null) return Colors.grey;
+  return cleaned.length == 6 ? Color(0xFF000000 | value) : Color(value);
 }
 
 /// 颜色参数编辑器（StatefulWidget：TextEditingController 需要随外部值同步）。
