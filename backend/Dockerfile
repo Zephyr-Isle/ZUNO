@@ -6,7 +6,8 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev=false
+# devDeps 里的 esbuild 是构建工具，必须装。
+RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY selfhost ./selfhost
