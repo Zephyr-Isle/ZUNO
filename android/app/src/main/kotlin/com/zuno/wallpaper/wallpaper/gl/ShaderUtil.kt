@@ -46,10 +46,13 @@ object ShaderUtil {
         return program
     }
 
-    inline fun checkGlError(where: String) {
+    /** @return 是否存在未清的 GL 错误（调用方据此决定是否升级到重建/回退）。 */
+    inline fun checkGlError(where: String): Boolean {
         val error = GLES20.glGetError()
         if (error != GLES20.GL_NO_ERROR) {
             Log.w("ZunoGL", "GL error 0x${Integer.toHexString(error)} at $where")
+            return true
         }
+        return false
     }
 }

@@ -23,8 +23,13 @@ export async function handleAdminDelete(request: Request, env: Env): Promise<Res
     .first<{ id: string }>();
   if (!row) return fail(404, 'wallpaper_not_found', '壁纸不存在');
 
-  await env.DB.prepare('DELETE FROM downloads WHERE wallpaper_id = ?1').bind(id).run();
-  await env.DB.prepare('DELETE FROM wallpapers WHERE id = ?1').bind(id).run();
+  // batch = 单事务：两条 DELETE 原子生效。此前顺序执行时，第二条失败
+  // （D1 瞬时错误）会留下"下载记录已清、壁纸行还在"的半删除状态——目录
+  // 仍列出它、票据照常签发，而下载历史已经丢失。
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM downloads WHERE wallpaper_id = ?1').bind(id),
+    env.DB.prepare('DELETE FROM wallpapers WHERE id = ?1').bind(id),
+  ]);
 
   return json({ deleted: id });
 }

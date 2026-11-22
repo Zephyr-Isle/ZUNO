@@ -80,9 +80,12 @@ export function fromBase64url(value: string): Uint8Array {
 }
 
 export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a[i] ^ b[i];
+  // 长度不匹配时提前返回会泄露密钥长度（admin 端点直接比较攻击者可控的
+  // x-admin-secret 头）。零填充到同一长度再比对：耗时只取决于较长一侧，
+  // 长度不等与内容不等在时序上不可区分。
+  const max = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < max; i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
   return diff === 0;
 }
 
@@ -97,13 +100,15 @@ export function randomToken(byteLength = 32): string {
 
 /**
  * 按段编码 WebDAV 路径：中文/空格逐段 encodeURIComponent，保留 `/`。
- * 拒绝空段与 `.` / `..`，避免路径逃逸。
+ * 拒绝空段与 `.` / `..`，避免路径逃逸；含反斜杠的段同样拒绝——部分
+ * Windows/IIS 系 WebDAV 实现把 `\` 当分隔符，`a\..\..\evil` 会被还原成
+ * 目录穿越。
  */
 export function encodePath(value: string): string {
   const segments = value.replace(/^\/+/, '').split('/');
   return segments
     .map((segment) => {
-      if (segment === '' || segment === '.' || segment === '..') {
+      if (segment === '' || segment === '.' || segment === '..' || segment.includes('\\')) {
         throw new Error(`非法路径段: ${segment}`);
       }
       return encodeURIComponent(segment);
@@ -115,12 +120,31 @@ export async function readJsonObject(
   request: Request,
   maxBytes = 16 * 1024,
 ): Promise<Record<string, unknown> | null> {
-  const declared = Number(request.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > maxBytes) return null;
-  const text = await request.text();
-  if (text.length > maxBytes) return null;
+  // 以字节为界、边读边计数：此前先 request.text() 全量缓冲再按 text.length
+  // （UTF-16 码元）比较——增补平面字符一个码元占 4 字节，实际字节量可达
+  // 预算的 4 倍；chunked 请求没有 content-length，预检被完全绕过。
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(merged));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     return parsed as Record<string, unknown>;
   } catch {

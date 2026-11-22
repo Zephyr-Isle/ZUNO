@@ -81,10 +81,24 @@ class HtmlPreviewActivity : Activity() {
         finish()
     }
 
+    override fun onPause() {
+        // 退到后台（Home/切应用）时完整运行 JS 定时器与 CSS 动画会白烧电：
+        // 重动画壁纸会一直跑到用户手动销毁。与壁纸引擎的省电语义对齐。
+        webView?.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView?.onResume()
+    }
+
     override fun onDestroy() {
         webView?.let {
             it.onPause()
-            it.removeAllViews()
+            // destroy 的契约要求 WebView 先脱离视图树；removeAllViews 清的是
+            // 它自己的孩子，并不解除它挂在自己父容器（预览页容器）上这一层。
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
             it.destroy()
         }
         webView = null

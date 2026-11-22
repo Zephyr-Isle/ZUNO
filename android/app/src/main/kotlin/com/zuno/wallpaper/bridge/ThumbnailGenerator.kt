@@ -149,11 +149,18 @@ object ThumbnailGenerator {
         }
         val out = File(outPath)
         out.parentFile?.mkdirs()
-        FileOutputStream(out).use { fos ->
+        // compress 返回 false（编码器错误/磁盘满）时文件已创建但内容为空或
+        // 截断——返回 null 让调用方走“无缩略图”占位路径，而不是留下一个
+        // 永久坏图。
+        val ok = FileOutputStream(out).use { fos ->
             scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, fos)
         }
         if (scaled !== source) scaled.recycle()
         source.recycle()
+        if (!ok) {
+            out.delete()
+            return null
+        }
         return out.absolutePath
     }
 }

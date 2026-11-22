@@ -2,6 +2,7 @@ package com.zuno.wallpaper.wallpaper.engine
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log

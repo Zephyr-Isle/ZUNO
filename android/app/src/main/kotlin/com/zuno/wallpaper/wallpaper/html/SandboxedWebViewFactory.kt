@@ -171,7 +171,7 @@ object SandboxedWebViewFactory {
         // addDocumentStartJavaScript 由内核保证在文档创建时、页面脚本前运行。
         androidx.webkit.WebViewCompat.addDocumentStartJavaScript(
             webView,
-            listOf(SANDBOX_BOOT_JS),
+            SANDBOX_BOOT_JS,
             setOf("https://$DOMAIN"),
         )
 

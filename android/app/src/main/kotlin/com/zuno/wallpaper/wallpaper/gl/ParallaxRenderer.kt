@@ -66,6 +66,12 @@ class ParallaxRenderer(
     private var width = 0
     private var height = 0
 
+    /** 当前 fragment 是否来自包内 shader.glsl（draw 阶段失败时据此降级内置）。 */
+    private var usingCustomShader = false
+
+    /** draw 阶段连续 GL 错误计数：达到 3 次触发降级/重建。 */
+    private var consecutiveGlErrors = 0
+
     private lateinit var quad: FloatBuffer
 
     // uniform location 缓存：每帧查 location 是 GL 常见反模式（字符串查找开销）。
@@ -86,11 +92,13 @@ class ParallaxRenderer(
         height = viewH
 
         val fragment = loadFragmentSource()
+        usingCustomShader = fragment != FRAGMENT_SRC
         program = try {
             ShaderUtil.linkProgram(VERTEX_SRC, fragment)
         } catch (t: Throwable) {
             Log.e("ZunoGL", "custom shader failed, fallback to builtin", t)
             program = 0
+            usingCustomShader = false
             ShaderUtil.linkProgram(VERTEX_SRC, FRAGMENT_SRC)
         }
         GLES20.glUseProgram(program)
@@ -165,10 +173,15 @@ class ParallaxRenderer(
         val max = IntArray(1).also {
             GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, it, 0)
         }[0]
-        // 降采样：sample 必须满足 out/sample <= max（原条件写成"半尺寸 >= max 才继续
-        // 加倍"，会漏掉 1.5x~2x 超限的图，导致 texImage2D 上传失败、壁纸黑屏）。
+        // 像素预算：此前只对齐 GPU 最大纹理尺寸，4000×3000 的照片会被按原分辨率
+        // ARGB_8888 解码（~48MB，进程未开 largeHeap）——OutOfMemoryError 经 onLost
+        // 进入退避重建循环，每轮重新解码同一张大图，壁纸永久黑屏 + 堆无限抖动。
+        // 壁纸按 1080p 级别渲染足够：最长边钳到 2048，同时不超过 GPU 纹理上限。
+        // （降采样条件必须用 "out/sample > budget" 而非 "半尺寸 >= budget 才加倍"：
+        // 后者会漏掉 1.5x~2x 超限的图，导致 texImage2D 上传失败、壁纸黑屏。）
+        val budget = minOf(max, 2048)
         var sample = 1
-        while (bounds.outWidth / sample > max || bounds.outHeight / sample > max) {
+        while (bounds.outWidth / sample > budget || bounds.outHeight / sample > budget) {
             sample *= 2
         }
         val opts = BitmapFactory.Options().apply {
@@ -210,7 +223,40 @@ class ParallaxRenderer(
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         GLES20.glDisableVertexAttribArray(uPosLoc)
-        ShaderUtil.checkGlError("ParallaxRenderer.draw")
+        // draw 阶段的 GL 错误此前只记日志：自定义 shader 编译/链接通过但每帧
+        // 运行时报错（特定驱动的 uniform/varying 超限等）时，壁纸静默黑屏且
+        // 内置着色器永远没机会接管。连续 3 次错误触发升级：自定义 shader 同步
+        // 重链内置版本自愈；内置 shader 也连续失败则抛给 onLost 走重建退避。
+        if (ShaderUtil.checkGlError("ParallaxRenderer.draw")) {
+            consecutiveGlErrors += 1
+            if (consecutiveGlErrors >= 3) {
+                consecutiveGlErrors = 0
+                if (usingCustomShader) {
+                    Log.e("ZunoGL", "custom shader failed at draw time, relinking builtin")
+                    rebuildWithBuiltinShader()
+                } else {
+                    throw IllegalStateException("GL draw failed repeatedly")
+                }
+            }
+        }
+    }
+
+    /** draw 阶段降级：删除当前 program，同步重链内置 fragment 并重取 uniform 位置。 */
+    private fun rebuildWithBuiltinShader() {
+        GLES20.glDeleteProgram(program)
+        program = ShaderUtil.linkProgram(VERTEX_SRC, FRAGMENT_SRC)
+        usingCustomShader = false
+        GLES20.glUseProgram(program)
+        uPosLoc = GLES20.glGetAttribLocation(program, "aPos")
+        uColorLoc = GLES20.glGetUniformLocation(program, "sColor")
+        uDepthLoc = GLES20.glGetUniformLocation(program, "sDepth")
+        uTiltLoc = GLES20.glGetUniformLocation(program, "uTilt")
+        uStrengthLoc = GLES20.glGetUniformLocation(program, "uStrength")
+        uZoomLoc = GLES20.glGetUniformLocation(program, "uZoom")
+        uAspectLoc = GLES20.glGetUniformLocation(program, "uAspect")
+        // 纹理每帧在 draw 里重新绑定到 TEXTURE0/1，下一帧的 uniform1i 会重新
+        // 指向新 program 的位置，无需在这里重建纹理。
+        ShaderUtil.checkGlError("ParallaxRenderer.rebuildWithBuiltinShader")
     }
 
     fun teardown() {

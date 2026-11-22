@@ -56,12 +56,19 @@ object ZunoBridge {
             "setActiveWallpaper" -> {
                 // Dart 侧已完成 manifest 校验；这里只做参数落地。
                 // timed 类型不会走到这里（Dart 会先 resolveTimedSlot 拿到具体 slot）。
+                // configJson 是“数据不是代码”：它会被原样拼接进
+                // window.__ZUNO_CONFIG__ = <json>; 的 JS 注入（HTML 壁纸/预览）。
+                // 损坏的历史数据或异常写入者必须在此收敛为 "{}"，否则页面热更新
+                // 静默失效，甚至可能被构造成任意 JS 在壁纸 WebView 里执行。
+                val configJson = runCatching {
+                    org.json.JSONObject(args.str("configJson") ?: "{}").toString()
+                }.getOrDefault("{}")
                 val wallpaper = ActiveWallpaper(
                     id = args.str("id") ?: return result.error("bad_args", "id required", null),
                     type = args.str("type") ?: return result.error("bad_args", "type required", null),
                     dir = args.str("dir") ?: return result.error("bad_args", "dir required", null),
                     entry = args.str("entry") ?: return result.error("bad_args", "entry required", null),
-                    configJson = args.str("configJson") ?: "{}",
+                    configJson = configJson,
                     capabilitiesJson = args.str("capabilitiesJson") ?: "{}",
                     timedParentDir = args.str("timedParentDir"),
                 )

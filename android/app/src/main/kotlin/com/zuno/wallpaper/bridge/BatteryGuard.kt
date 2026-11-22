@@ -59,10 +59,10 @@ object BatteryGuard {
     fun isCharging(context: Context): Boolean {
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             ?: return false
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
-        return status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL ||
-            plugged > 0
+        // 只以 plugged 判断充电。status==FULL 不能算：不少 ROM 在拔线充满后
+        // 仍上报 FULL——chargingOnly 的 timed 包会在无充电器时照常切换，
+        // 正是本方法 KDoc 声明要避免的误报。
+        return plugged > 0
     }
 }

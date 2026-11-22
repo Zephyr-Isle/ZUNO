@@ -63,6 +63,10 @@ class SqliteDatabase {
     // StatementSync（node:sqlite 按调用传参绑定，跨调用互不影响）。
     const stmt = this.db.prepare(sql);
     const makeStatement = (bound: SQLInputValue[]) => ({
+      /** batch 内部使用：以当前绑定参数同步执行（每条语句各自覆盖）。 */
+      _exec: () => {
+        stmt.run(...bound);
+      },
       run: async () => {
         stmt.run(...bound);
         return { success: true as const, meta: {} };
@@ -84,6 +88,19 @@ class SqliteDatabase {
       ...makeStatement([]),
       bind: (...params: unknown[]) => makeStatement(params.map(toSql)),
     };
+  }
+
+  /** D1Database.batch 的最小实现：单事务顺序执行，任一失败整体回滚。 */
+  batch(statements: Array<{ _exec: () => void }>): Promise<unknown[]> {
+    this.db.exec('BEGIN');
+    try {
+      const results = statements.map((statement) => statement._exec());
+      this.db.exec('COMMIT');
+      return Promise.resolve(results);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      return Promise.reject(error);
+    }
   }
 
   exec(sql: string): void {

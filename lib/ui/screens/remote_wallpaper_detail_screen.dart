@@ -74,10 +74,8 @@ class _RemoteWallpaperDetailScreenState
       // 与本地导入保持一致：成功后直达详情页，应用壁纸是自然的下一步。
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => WallpaperDetailScreen(
-            controller: widget.library,
-            entry: entry,
-          ),
+          builder: (_) =>
+              WallpaperDetailScreen(controller: widget.library, entry: entry),
         ),
       );
     } on ApiException catch (error) {
@@ -172,9 +170,8 @@ class _RemoteWallpaperDetailScreenState
                   Text(
                     item.title,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   TypeBadge(type: item.type),
@@ -188,10 +185,14 @@ class _RemoteWallpaperDetailScreenState
               surfaceStyle: lgw.GlassSurfaceStyle.solid,
               shape: glassShape(radius: 28),
               children: [
-                _row(context, AppIcons.user, '作者',
-                    (item.author == null || item.author!.isEmpty)
-                        ? '未署名'
-                        : item.author!),
+                _row(
+                  context,
+                  AppIcons.user,
+                  '作者',
+                  (item.author == null || item.author!.isEmpty)
+                      ? '未署名'
+                      : item.author!,
+                ),
                 _row(context, AppIcons.layers, '版本', 'v${item.version}'),
                 _row(context, AppIcons.database, '大小', item.sizeLabel),
                 _row(context, AppIcons.clock, '更新', item.updatedLabel),
