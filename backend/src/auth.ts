@@ -128,8 +128,31 @@ function recordLoginFailure(email: string): void {
   } else {
     entry.count += 1;
   }
-  // 限流表只在 isolate 内有效，超过一定规模就整体清空，避免常驻内存增长。
-  if (loginFailures.size > 5_000) loginFailures.clear();
+  evictLoginFailures(now);
+}
+
+/** 限流表常驻内存上限（isolate 内）。 */
+const LOGIN_FAILURES_MAX = 5_000;
+
+/**
+ * 限流表只在 isolate 内有效，需要控制常驻内存。此前超限时整体 clear()：
+ * 攻击者可以先用 5000 个假邮箱灌满限流表——clear 连受害者的失败计数一起
+ * 抹掉，暴力破解防护被打空（受害者密码可反复试 10 次）。
+ * 现在改为：先清过期条目；仍超限则淘汰计数最低的一批——假邮箱喷射的条目
+ * count 通常是 1，受害者的失败计数远高于此，不会被无差别清空。
+ */
+function evictLoginFailures(now: number): void {
+  if (loginFailures.size <= LOGIN_FAILURES_MAX) return;
+  for (const [email, entry] of loginFailures) {
+    if (entry.resetAt <= now) loginFailures.delete(email);
+  }
+  if (loginFailures.size > LOGIN_FAILURES_MAX) {
+    const excess = loginFailures.size - LOGIN_FAILURES_MAX;
+    const lowest = [...loginFailures.entries()]
+      .sort((a, b) => a[1].count - b[1].count)
+      .slice(0, excess);
+    for (const [email] of lowest) loginFailures.delete(email);
+  }
 }
 
 function clearLoginFailures(email: string): void {

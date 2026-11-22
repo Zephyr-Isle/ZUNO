@@ -101,6 +101,10 @@ export async function handleDownload(
     upstream = await withSlot(downloadConcurrency(env), () =>
       davRequest(env, row.webdav_path, {
         method,
+        // 上游挂死（TCP 建连/响应黑洞）会让 withSlot 的槽位永不释放，后续
+        // /download 全部卡在等待队列轮询。给代理请求一个宽松的总超时兜底：
+        // 大包慢链路也要几分钟，10 分钟远超正常耗时；超时即释放槽位。
+        timeoutMs: 600_000,
         // Range / Accept-Encoding 仍原样带上，但要知道：Workers 的 fetch 子请求
         // 会把这两个头剥掉（实测 WebDAV 收到的是整文件 GET + gzip），所以
         // 上游永远回 200 + 整个文件，206 只在本地 dev（node 运行时）才可能出现。

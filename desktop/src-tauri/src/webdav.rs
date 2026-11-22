@@ -113,7 +113,14 @@ pub async fn list_dir(
         if name.is_empty() {
             continue; // 目录自身
         }
-        let name = urlencoding::decode(name).unwrap_or_default().into_owned();
+        let decoded = urlencoding::decode(name);
+        let name = match decoded {
+            // 解码失败/空名：条目不可信，直接跳过。此前 unwrap_or_default 会
+            // 产出空名继续参与匹配，delete 漏删真实文件却照样清 D1 行，
+            // 下次 sync 又把半删除状态重新收录。
+            Ok(value) if !value.is_empty() => value.into_owned(),
+            _ => continue,
+        };
         out.push((name, collection_re.is_match(&block[1])));
     }
     Ok(out)

@@ -41,11 +41,28 @@ function davBase(env: Env): { base: string; authorization: string } {
   };
 }
 
-export function davRequest(env: Env, path: string, init?: RequestInit): Promise<Response> {
+export function davRequest(
+  env: Env,
+  path: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<Response> {
   const { base, authorization } = davBase(env);
   const headers = new Headers(init?.headers);
   headers.set('authorization', authorization);
-  return fetch(`${base}/${encodePath(path)}`, { ...init, headers, redirect: 'follow' });
+  const { timeoutMs, ...requestInit } = init ?? {};
+  if (!timeoutMs) {
+    return fetch(`${base}/${encodePath(path)}`, { ...requestInit, headers, redirect: 'follow' });
+  }
+  // 上游挂死（TCP 建连/响应黑洞）时 fetch 可能永不落定——下载代理的并发槽
+  // 因此永不释放，后续请求在 withSlot 里无限轮询。用 AbortController 兜底。
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(`${base}/${encodePath(path)}`, {
+    ...requestInit,
+    headers,
+    signal: controller.signal,
+    redirect: 'follow',
+  }).finally(() => clearTimeout(timer));
 }
 
 export async function propfind(env: Env, path: string, depth: '0' | '1'): Promise<DavEntry[]> {
@@ -53,6 +70,7 @@ export async function propfind(env: Env, path: string, depth: '0' | '1'): Promis
     method: 'PROPFIND',
     headers: { depth, 'content-type': 'application/xml; charset=utf-8' },
     body: PROPFIND_BODY,
+    timeoutMs: 30_000,
   });
   if (response.status !== 207) {
     await response.body?.cancel();
@@ -92,6 +110,7 @@ export async function davRead(
       range: `bytes=${start}-${endInclusive}`,
       'accept-encoding': 'identity',
     },
+    timeoutMs: 30_000,
   });
   if (response.status === 206) return new Uint8Array(await response.arrayBuffer());
   if (response.status === 200 && start === 0) return new Uint8Array(await response.arrayBuffer());
@@ -125,9 +144,25 @@ function pickTag(block: string, tag: string): string | null {
   return xmlUnescape(match[1].trim());
 }
 
+/** 路径逐段百分号解码，避免把段内的 %2F 还原成路径分隔符。 */
+function decodeSegments(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    })
+    .join('/');
+}
+
 /** 解析 207 Multi-Status；跳过授权根自身与 base 之外的 href。 */
 export function parseMultiStatus(xml: string, env: Env): DavEntry[] {
-  const basePath = new URL(env.WEBDAV_BASE).pathname.replace(/\/+$/, '');
+  // 与 href 相同的逐段解码：WEBDAV_BASE 含百分号编码（如 %20）时不解的话，
+  // 编码的 base 和解码后的 href 做前缀匹配永远失败，所有条目被静默过滤。
+  const basePath = decodeSegments(new URL(env.WEBDAV_BASE).pathname.replace(/\/+$/, ''));
   const entries: DavEntry[] = [];
 
   for (const match of xml.matchAll(RESPONSE_BLOCK)) {
@@ -142,17 +177,7 @@ export function parseMultiStatus(xml: string, env: Env): DavEntry[] {
       continue;
     }
 
-    // 逐段解码，避免把段内的 %2F 还原成路径分隔符。
-    const decoded = hrefPath
-      .split('/')
-      .map((segment) => {
-        try {
-          return decodeURIComponent(segment);
-        } catch {
-          return segment;
-        }
-      })
-      .join('/');
+    const decoded = decodeSegments(hrefPath);
     const normalized = decoded.replace(/\/+$/, '');
     if (normalized === basePath) continue;
     if (!normalized.startsWith(`${basePath}/`)) continue;

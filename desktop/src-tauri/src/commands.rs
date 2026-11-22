@@ -141,6 +141,33 @@ pub async fn delete_wallpaper(
     Ok(result)
 }
 
+/// 启动时清扫上次会话遗留的临时产物：
+/// - `zuno-remote-*.zuno`：远端预览下载的整包（视频包可达数百 MB）；
+/// - `zuno-preview-*`：预览时解压出的完整包内容。
+/// 此前两者从不删除，长期使用的管理机会在系统临时目录累积数十 GB。
+/// 预览窗口由前端直接关 modal，拿不到可靠的清理时机，故选择启动清扫——
+/// 上次会话的产物此刻必然不再被任何进程使用。
+pub fn sweep_temp_artifacts() {
+    let temp = std::env::temp_dir();
+    let Ok(entries) = std::fs::read_dir(&temp) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let is_ours = name.starts_with("zuno-preview-")
+            || (name.starts_with("zuno-remote-") && name.ends_with(".zuno"));
+        if !is_ours {
+            continue;
+        }
+        let _ = if entry.path().is_dir() {
+            std::fs::remove_dir_all(entry.path())
+        } else {
+            std::fs::remove_file(entry.path())
+        };
+    }
+}
+
 fn temp_package(id: &str) -> PathBuf {
     let safe: String = id
         .chars()

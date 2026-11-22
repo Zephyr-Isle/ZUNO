@@ -156,45 +156,55 @@ class VideoWallpaperEngine(
 
     private var cachedColors: android.app.WallpaperColors? = null
 
-    /** 从视频首帧提取 WallpaperColors（结果缓存；首帧在壁纸生命周期内不变）。 */
+    /** 从包缩略图提取 WallpaperColors（结果缓存；缩略图即导入期的首帧截图）。 */
     private fun computeColors(): android.app.WallpaperColors? {
         if (android.os.Build.VERSION.SDK_INT < 27) return null
         cachedColors?.let { return it }
+        // 用缩略图取色而非 onComputeColors 里现解视频首帧：取色回调跑在主线程
+        // （无 android:process，与 Flutter UI 同一线程），getFrameAtTime 对
+        // 4K 视频可达数百 ms，会 ANR；缩略图是导入期生成的小图，解码毫秒级，
+        // 观感等价（首帧截图或作者图）。
+        val bmp = loadThumbnailBitmap() ?: return null
         return try {
-            val retriever = MediaMetadataRetriever()
-            val frame = try {
-                retriever.setDataSource(File(wallpaper.dir, wallpaper.entry).absolutePath)
-                retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            } finally {
-                runCatching { retriever.release() }
-            } ?: return null
-            val colors = android.app.WallpaperColors.fromBitmap(frame)
-            frame.recycle()
+            val colors = android.app.WallpaperColors.fromBitmap(bmp)
             cachedColors = colors
             colors
         } catch (t: Throwable) {
             Log.w(TAG, "video colors compute failed", t)
             null
+        } finally {
+            bmp.recycle()
         }
     }
+
+    /** 包缩略图：作者提供的 thumbnail.png 优先，否则导入时生成的 thumbnail.jpg。 */
+    private fun loadThumbnailBitmap(): Bitmap? =
+        sequenceOf("thumbnail.png", "thumbnail.jpg")
+            .map { File(wallpaper.dir, it) }
+            .firstOrNull { it.isFile }
+            ?.let { runCatching { BitmapFactory.decodeFile(it.absolutePath) }.getOrNull() }
 
     override fun onComputeColors(): android.app.WallpaperColors? = computeColors()
 
     // ---------- 内部 ----------
 
-    /** 媒体源缺失或解码失败时的静态首帧；失败则保持黑屏。 */
+    /** 媒体源缺失或解码失败时的静态画面：视频首帧 → 包缩略图 → 保持黑屏。 */
     private fun showStaticFirstFrame() {
         val surface = surfaceHolder?.surface ?: return
         if (!surface.isValid) return
-        try {
+        val frame = try {
             val retriever = MediaMetadataRetriever()
-            val frame = try {
+            try {
                 retriever.setDataSource(File(wallpaper.dir, wallpaper.entry).absolutePath)
                 retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
             } finally {
                 runCatching { retriever.release() }
-            } ?: return
+            }
+        } catch (t: Throwable) {
+            null
+        } ?: loadThumbnailBitmap() ?: return
 
+        try {
             val canvas = surface.lockCanvas(null) ?: return
             try {
                 canvas.drawColor(android.graphics.Color.BLACK)
@@ -235,6 +245,9 @@ class VideoWallpaperEngine(
                 wallpaper.id,
                 "视频文件不存在",
             )
+            // 文件缺失无法起播放器，但包缩略图仍可画到 Surface 上——
+            // 否则用户看到的是纯黑屏且没有任何恢复信号。
+            showStaticFirstFrame()
             return
         }
         decodeMode = ActiveWallpaperStore.videoDecodeMode(context)
@@ -262,13 +275,16 @@ class VideoWallpaperEngine(
 
         try {
             val exo = ExoPlayer.Builder(context, renderersFactory).build()
+            // 立即登记到字段：后续 addListener/prepare 抛错时 catch 里才能经
+            // releasePlayer 释放；否则半初始化的播放器（持有引擎监听器引用）
+            // 会泄漏到引擎销毁，反复重建 Surface 时累积。
+            player = exo
             exo.repeatMode = Player.REPEAT_MODE_ONE
             exo.addListener(playerListener)
             exo.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
             surfaceHolder?.let { exo.setVideoSurfaceHolder(it) }
             applyConfig(exo)
             exo.prepare()
-            player = exo
         } catch (t: Throwable) {
             Log.e(TAG, "prepare failed for ${wallpaper.entry}", t)
             ActiveWallpaperStore.recordVideoDecodeFailure(
@@ -276,6 +292,7 @@ class VideoWallpaperEngine(
                 wallpaper.id,
                 "${t.javaClass.simpleName}: ${t.message}",
             )
+            releasePlayer()
             showStaticFirstFrame()
         }
     }

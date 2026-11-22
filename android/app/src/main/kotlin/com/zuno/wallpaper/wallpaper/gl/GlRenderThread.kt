@@ -152,6 +152,16 @@ class GlRenderThread(
         val s = surface ?: return false
         val c = context ?: return false
         if (EGL14.eglGetCurrentContext() !== c && !EGL14.eglMakeCurrent(d, s, s, c)) {
+            // 上下文丢失（GPU 复位/驱动重置）且重挂也失败：与 swap 失败同等
+            // 对待——断链并通知 Engine 走重建。此前静默 return false 会让
+            // 帧链继续空转（Choreographer 每 vsync 醒一次、什么也不画），
+            // 深度壁纸永久黑屏且没有任何恢复事件。
+            android.util.Log.e(
+                "ZunoGL",
+                "renderOnce: eglMakeCurrent failed err=0x${Integer.toHexString(EGL14.eglGetError())}",
+            )
+            glReady = false
+            onLost()
             return false
         }
         try {

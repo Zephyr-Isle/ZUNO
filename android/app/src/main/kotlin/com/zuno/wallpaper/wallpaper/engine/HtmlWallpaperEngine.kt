@@ -72,9 +72,15 @@ class HtmlWallpaperEngine(
     private var powerSave = false
     private var pageReady = false
 
+    /** JS 桥回调从 JavaBridge 线程切回主线程用（config 串行写）。 */
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     /** WebView 当前是否处于 onPause（JS 定时器暂停）——幂等切换的判定依据。 */
     private var jsPaused = false
     private var frozen = false
+
+    /** 已推送给页面 rAF 门的间隔值（-1 = 未知，强制重推）。 */
+    private var pushedFrameInterval = -1L
 
     // 性能档位：缓存字段 + 事件时刷新（applyWebViewLifecycle 与帧间隔无关）。
     private var tier = PerformanceTier.MEDIUM
@@ -93,13 +99,19 @@ class HtmlWallpaperEngine(
     }
 
     override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        this.holder = holder
         if (width != viewWidth || height != viewHeight) {
             viewWidth = width
             viewHeight = height
-            // 壁纸 Surface 尺寸变化（转屏等）：虚拟屏与内容需要按新尺寸重建。
+            // 壁纸 Surface 尺寸变化（转屏/折叠等）：虚拟屏与内容需要按新尺寸重建。
+            // 顺序关键：teardownPresentation 会把 holder 一并清空（那是给
+            // onSurfaceDestroyed 用的语义），必须先 teardown 再挂新 holder，
+            // 否则下面的 ensurePresentation 撞到 null holder 直接返回，
+            // HTML 壁纸在 resize 后永久黑屏（只能等系统重建 Surface）。
             teardownPresentation()
+            this.holder = holder
             ensurePresentation()
+        } else {
+            this.holder = holder
         }
     }
 
@@ -207,7 +219,17 @@ class HtmlWallpaperEngine(
             Log.e(TAG, "createVirtualDisplay failed, html wallpaper stays black")
             return
         }
-        presentation = HtmlPresentation(context, display, view).also { it.show() }
+        presentation = HtmlPresentation(context, display, view).also { p ->
+            // show() 在窗口 token/虚拟屏失效竞态下可能抛异常（转屏、快速锁屏
+            // 时的 teardown 抢在重建前面）。失败按 createVirtualDisplay 失败
+            // 处理：清空状态等下次事件重建，绝不让异常逃出 Engine 回调。
+            runCatching { p.show() }.onFailure { t ->
+                Log.e(TAG, "HtmlPresentation.show failed", t)
+                presentation = null
+                virtualDisplayObj?.release()
+                virtualDisplayObj = null
+            }
+        }
     }
 
     private fun teardownPresentation() {
@@ -233,19 +255,35 @@ class HtmlWallpaperEngine(
                 entryRelativePath = wallpaper.entry,
                 configJson = latestConfig,
                 onSetConfig = { key, value ->
-                    // JS 桥回调：写回 config 存储 + 广播。字符串写 SharedPreferences，
-                    // 无任何锁竞争风险（apply 异步落盘）。
-                    val current = ActiveWallpaperStore.load(context) ?: return@create
-                    val json = org.json.JSONObject(current.configJson).put(key, value)
-                    val updated = json.toString()
-                    ActiveWallpaperStore.updateConfig(context, updated)
-                    ConfigBus.emit(ConfigBus.Event.CONFIG_CHANGED)
+                    // JS 桥回调运行在 WebView 的 JavaBridge 线程，这里有两个坑：
+                    // 1) JSONObject 解析存储的 configJson 可能因历史损坏数据抛
+                    //    未捕获异常——任何线程的未捕获异常都会杀死整个壁纸进程
+                    //    （桌面直接黑屏直到系统重启服务）；
+                    // 2) 与主线程的 updateConfig/save 构成 read-modify-write
+                    //    竞态，两次快速 setConfig 会互相覆盖丢更新。
+                    // 一并解决：整体投递到主线程串行执行；解析失败仅记日志，
+                    // 不让异常逃出桥线程。
+                    mainHandler.post {
+                        try {
+                            val current =
+                                ActiveWallpaperStore.load(context) ?: return@post
+                            val json = org.json.JSONObject(
+                                current.configJson.ifBlank { "{}" },
+                            ).put(key, value)
+                            ActiveWallpaperStore.updateConfig(context, json.toString())
+                            ConfigBus.emit(ConfigBus.Event.CONFIG_CHANGED)
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "setConfig: 写回壁纸参数失败", t)
+                        }
+                    }
                 },
                 onPageReady = {
                     pageReady = true
                     // 关键：若引擎在省电/LOW 档位下启动，冻结样式是在页面加载前
                     // 注入的（evaluateJavascript 落在空文档上，随后被新文档覆盖）。
                     // 页面就绪后必须重放冻结 + JS 暂停状态，否则省电承诺失效。
+                    // rAF 门的间隔值同理会被导航重置，先解除去重标记强制重推。
+                    pushedFrameInterval = -1L
                     applyWebViewLifecycle()
                 },
             )
@@ -274,6 +312,13 @@ class HtmlWallpaperEngine(
         if (wantJsPaused != jsPaused) {
             jsPaused = wantJsPaused
             if (wantJsPaused) view.onPause() else view.onResume()
+        }
+        // MEDIUM 档位 ~30fps 由页面内 rAF 门实现（SANDBOX_BOOT_JS 注入）；
+        // LOW 档位已经 CSS 冻结 + JS 暂停（setTimeout 停摆，门自然停），归零即可。
+        val frameInterval = if (wantJsPaused) 0L else tier.htmlFrameIntervalMs
+        if (frameInterval != pushedFrameInterval) {
+            pushedFrameInterval = frameInterval
+            view.evaluateJavascript("window.__zunoFrameIntervalMs = $frameInterval;", null)
         }
     }
 

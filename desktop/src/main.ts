@@ -409,7 +409,22 @@ async function bootstrap(): Promise<void> {
     status(event.payload.stage, event.payload.message, event.payload.value);
   });
 
-  config = await invoke<Config>("load_config");
+  // load_config 读应用配置目录的 config.json：文件损坏（手改坏 JSON）会让
+  // Rust 侧返回 Err——此前未捕获，导航点击只切 CSS、两个页签永远空白，且
+  // 设置表单根本没渲染，用户无法在 UI 里修复，只能手删配置文件。捕获后
+  // 回退默认配置（空 apiBase/WebDAV），设置页始终可用。
+  try {
+    config = await invoke<Config>("load_config");
+  } catch {
+    config = {
+      apiBase: "",
+      adminSecret: "",
+      webdavBase: "",
+      webdavUser: "",
+      webdavPass: "",
+      localDir: "",
+    };
+  }
   renderActions();
   renderSettings();
   await run(refreshCloud);

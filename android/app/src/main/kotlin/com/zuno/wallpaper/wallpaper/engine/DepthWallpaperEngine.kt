@@ -267,14 +267,20 @@ class DepthWallpaperEngine(
         val shaderPath = File(wallpaper.dir, "content/shader.glsl").absolutePath
         // 入口素材缺失（包被清理/数据损坏）时直接不启动 GL 线程——
         // ParallaxRenderer.setup 抛异常现在也不会崩进程，但提前检查能省一次 EGL 初始化。
+        // 注意不要把 surfaceReady 锁成 false：visibility / 尺寸变化 / 退避重试
+        // 都会再进本方法，素材重新就位（如重导入完成）后即可恢复；锁死会导致
+        // 只有销毁并重建 Surface 才能救回（此前表现为永久黑屏）。
         if (!File(colorPath).isFile || !File(depthPath).isFile) {
             Log.w(TAG, "package assets missing ($colorPath / $depthPath), skip GL start")
-            surfaceReady = false
             return
         }
         val renderer = ParallaxRenderer(colorPath, depthPath, shaderPath)
         renderer.setStrength(parallaxStrength)
         this.renderer = renderer
+        // 线程代号：每次新建自增。GL 线程的 onLost 经主线程 post 异步送达，
+        // 迟到的旧线程回调若不核对代号，会在新线程已重建后把它误杀（多黑
+        // 一个退避周期）。
+        val generation = ++glGeneration
         val thread = GlRenderThread(
             h,
             renderer,
@@ -285,7 +291,7 @@ class DepthWallpaperEngine(
             movingProvider = {
                 System.currentTimeMillis() - lastTiltChangeAt < STILL_AFTER_MS
             },
-            onLost = { onGlLost() },
+            onLost = { onGlLost(generation) },
         )
         thread.setTargetFps(if (powerSave) POWER_SAVE_FPS else tier.depthFps)
         thread.setPaused(false)
@@ -310,8 +316,14 @@ class DepthWallpaperEngine(
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     @Volatile private var glRebuildBackoffMs = 0L
 
-    private fun onGlLost() {
+    /** 当前 GL 线程代号（startGlIfNeeded 里自增），用于丢弃迟到的旧线程 onLost。 */
+    @Volatile private var glGeneration = 0
+
+    private fun onGlLost(generation: Int) {
         mainHandler.post {
+            // 迟到的回调：线程已被主动销毁/替换（代号不匹配）时不动作，
+            // 否则会把健康的替换线程关掉，多黑一个退避周期。
+            if (generation != glGeneration) return@post
             stopGl()
             val backoff = glRebuildBackoffMs
             glRebuildBackoffMs = if (backoff == 0L) 2_000L else (backoff * 2).coerceAtMost(60_000L)

@@ -99,6 +99,18 @@ export async function readManifestFromWebdav(
 
   // 3) 本地头给出可变长度的文件名/扩展字段，据此算出数据起点。
   const local = await davRead(env, path, target.localOffset, target.localOffset + 29);
+  // 本地头签名（PK\x03\x04）校验：中央目录的 localOffset 若损坏/被篡改，
+  // 这里会读到随机字节，切出的 dataStart 是垃圾值——浪费两次子请求且失败
+  // 被误报成"包损坏跳过"，无法与真正的损坏区分。
+  if (
+    local.length < 30 ||
+    local[0] !== 0x50 ||
+    local[1] !== 0x4b ||
+    local[2] !== 0x03 ||
+    local[3] !== 0x04
+  ) {
+    return null;
+  }
   const localNameLength = u16(local, 26);
   const localExtraLength = u16(local, 28);
   const dataStart = target.localOffset + 30 + localNameLength + localExtraLength;

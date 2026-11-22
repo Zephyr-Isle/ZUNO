@@ -198,7 +198,11 @@ fn compute_checksum(_root: &Path, files: &[(String, PathBuf)]) -> Result<String,
         .iter()
         .filter(|(relative, _)| relative.starts_with("content/"))
         .collect();
-    content.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    // 规范的「码元升序」以 Dart 的 String.compareTo 为准（UTF-16 code unit 序）。
+    // 此前按 UTF-8 字节序排序：BMP 内两者一致，但文件名含增补平面字符（emoji
+    // 等，UTF-16 代理对高位）时顺序分歧——同一包 Rust 打包、Flutter 导入重算
+    // 即报 checksumMismatch。这里改为逐码元（UTF-16）排序对齐规范。
+    content.sort_by_key(|(relative, _)| relative.encode_utf16().collect::<Vec<u16>>());
     for (relative, absolute) in content {
         hasher.update(relative.as_bytes());
         hasher.update([0x0A]);

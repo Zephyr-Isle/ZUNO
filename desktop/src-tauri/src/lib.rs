@@ -9,6 +9,8 @@ mod webdav;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 清扫上次会话遗留的预览临时产物（整包下载 + 解压目录，见 commands.rs）。
+    commands::sweep_temp_artifacts();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

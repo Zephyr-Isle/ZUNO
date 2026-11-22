@@ -291,6 +291,13 @@ export async function handleAdminSync(request: Request, env: Env): Promise<Respo
       if (isBudgetError(error)) {
         // 这个包还没扫完，下次从它开始；已收录的条目不会回滚。
         nextOffset = offset + index;
+        // 显式上报中止：desktop 端用 nextOffset > offset 判断是否续扫，
+        // index == 0 时两者相等会被当成"没有下一页"静默结束，管理端还
+        // 会弹"同步完成"。放进 skipped 让未扫完的包可见、可重试。
+        skipped.push({
+          path: packageDir.path,
+          reason: '请求预算耗尽，此包未扫完（稍后重试同步）',
+        });
         break;
       }
       skipped.push({ path: packageDir.path, reason: describe(error) });

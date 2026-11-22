@@ -244,14 +244,31 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`数据库：${dbPath}`);
 });
 
-// docker stop / Ctrl-C 时优雅退出：停止接新请求，最多等 3 秒。
+// 端口被占（重复容器/已有实例）时 Node 会发未处理的 'error' 事件并带原始
+// 堆栈崩溃——在 Docker 里表现为无意义的 crash-loop。这里给出明确原因退出。
+server.on('error', (error) => {
+  console.error('zuno-api 自托管服务器启动失败', error);
+  process.exit(1);
+});
+
+// docker stop / Ctrl-C 时优雅退出：停止接新请求并断开 keep-alive 空闲连接；
+// close 回调在活动请求（含流式下载与 waitUntil 后台任务）全部结束后触发，
+// 届时才关数据库——过早 close 会让在途写库丢失、下载被截断。3 秒硬超时
+// 兜底：超时放弃优雅收尾直接退出（客户端的 checksum/导入层会兜住半截文件）。
 let shuttingDown = false;
 function shutdown(): void {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log('收到退出信号，正在关闭…');
-  server.close(() => process.exit(0));
-  sqlite.close();
+  server.closeIdleConnections?.();
+  server.close(() => {
+    try {
+      sqlite.close();
+    } catch (error) {
+      console.error('关闭数据库失败', error);
+    }
+    process.exit(0);
+  });
   setTimeout(() => process.exit(0), 3000).unref();
 }
 process.on('SIGTERM', shutdown);

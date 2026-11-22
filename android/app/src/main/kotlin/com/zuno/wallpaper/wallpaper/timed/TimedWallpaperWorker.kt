@@ -86,6 +86,15 @@ class TimedWallpaperWorker(
             if (elapsed in 0 until minInterval * 60_000L) return Result.success()
         }
 
+        // 竞态防护：从开头的 load 到这里的 save 隔着文件 IO（解析 schedule +
+        // slot manifest），用户可能恰好在这段窗口里应用了别的壁纸。save 前
+        // 重读激活记录，若已不再是本 timed 包（timedParentDir 变了或为空），
+        // 放弃本次切换——否则旧 slot 记录会把用户新选的壁纸顶掉。
+        val latest = ActiveWallpaperStore.load(context)
+        if (latest == null || latest.timedParentDir != parentDir) {
+            return Result.success()
+        }
+
         ActiveWallpaperStore.save(
             context,
             ActiveWallpaper(
