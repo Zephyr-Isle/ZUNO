@@ -163,13 +163,17 @@ Future<Object> importZunoPackage({
     }
 
     /// 把归一化路径映射为“包内路径”（去掉顶层文件夹前缀）。
-    /// 构造出来的 ZIP 可以同时含根级文件 `folder` 与 `folder/manifest.json`：
-    /// 前者去前缀会越界（此前直接 RangeError，被兜底捕获后报出含糊的
-    /// “导入过程异常”）。不以 basePrefix 开头的路径一律映射为空串——空串
-    /// 不会匹配 entry/content 检查，解压循环按规格外条目丢弃。
-    String inner(String p) => basePrefix.isEmpty || !p.startsWith(basePrefix)
-        ? ''
-        : p.substring(basePrefix.length);
+    /// 根 manifest 时原样返回；带前缀时，不以 basePrefix 开头的路径映射为
+    /// 空串——构造出来的 ZIP 可以同时含根级文件 `folder` 与
+    /// `folder/manifest.json`，前者去前缀会越界（曾直接 RangeError，被兜底
+    /// 捕获后报出含糊的“导入过程异常”）。空串不会匹配 entry/content 检查，
+    /// 解压循环按规格外条目丢弃。
+    String inner(String p) {
+      if (basePrefix.isEmpty) return p;
+      if (!p.startsWith(basePrefix)) return '';
+      return p.substring(basePrefix.length);
+    }
+
     final packageFiles = entries.keys.map(inner).toSet();
 
     /// 按包内路径读取条目字节（读后释放缓存）。缺失路径由调用方先行判定。
