@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
 import 'package:zuno/core/zuno_paths.dart';
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
+import 'package:zuno/state/locale_controller.dart';
 import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/about_screen.dart';
+import 'package:zuno/ui/screens/language_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
 
@@ -18,12 +21,14 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.themeController,
+    required this.localeController,
     required this.endpoint,
     required this.catalog,
     required this.shellPrefs,
   });
 
   final ThemeController themeController;
+  final LocaleController localeController;
   final EndpointController endpoint;
 
   /// 保存新地址后要重建目录，否则列表还是旧后端的条目。
@@ -171,7 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     lgw.GlassToast.show(
       context,
-      message: '壁纸库地址已保存',
+      message: ZunoLocalizations.of(context).libraryAddressSaved,
       type: lgw.GlassToastType.success,
     );
   }
@@ -185,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     lgw.GlassToast.show(
       context,
-      message: '已清除壁纸库地址',
+      message: ZunoLocalizations.of(context).libraryAddressCleared,
       type: lgw.GlassToastType.success,
     );
   }
@@ -196,6 +201,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ignored = await ZunoNative.isIgnoringBatteryOptimizations();
     if (!mounted) return;
     setState(() => _batteryIgnored = ignored);
+  }
+
+  void _openLanguage() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LanguageScreen(controller: widget.localeController),
+      ),
+    );
   }
 
   /// 统计壁纸库（已安装包文件）的总大小。
@@ -221,6 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     final mediaQuery = MediaQuery.of(context);
     return lgw.GlassScaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -229,10 +243,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // extendBody:false 时包不启用边缘淡出，文字会在栏边界被硬切断。
       extendBody: true,
       appBar: lgw.GlassAppBar(
-        title: const Text('设置'),
+        title: Text(s.settingsTitle),
         leading: GlassCircleButton(
           icon: AppIcons.back,
-          semanticLabel: '返回',
+          semanticLabel: s.back,
           onPressed: () => Navigator.maybePop(context),
         ),
       ),
@@ -246,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Expanded(
               child: GlassSecondaryButton(
                 icon: AppIcons.refresh,
-                label: '清除地址',
+                label: s.clearAddress,
                 onPressed: _resetUrl,
               ),
             ),
@@ -254,7 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Expanded(
               child: GlassPrimaryButton(
                 icon: AppIcons.check,
-                label: '保存',
+                label: s.save,
                 onPressed: _saveUrl,
               ),
             ),
@@ -281,14 +295,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   bottom: mediaQuery.padding.bottom + 70 + 16,
                 ),
                 children: [
-                  _sectionLabel(context, '外观'),
+                  _sectionLabel(context, s.appearance),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: lgw.GlassSegmentedControl(
-                      segments: const [
-                        lgw.GlassSegment(label: '跟随系统', id: 'system'),
-                        lgw.GlassSegment(label: '浅色', id: 'light'),
-                        lgw.GlassSegment(label: '深色', id: 'dark'),
+                      segments: [
+                        lgw.GlassSegment(label: s.followSystem, id: 'system'),
+                        lgw.GlassSegment(label: s.light, id: 'light'),
+                        lgw.GlassSegment(label: s.dark, id: 'dark'),
                       ],
                       selectedIndex: _themeIndex,
                       onSegmentSelected: (index) => widget.themeController
@@ -303,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
-                      '默认跟随系统外观；切换立即生效，并记住你的选择。',
+                      s.appearanceHint,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -312,7 +326,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _sectionLabel(context, '界面'),
+                  _sectionLabel(context, s.interfaceSection),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: lgw.GlassContainer.card(
@@ -324,10 +338,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('显示底部导航栏'),
+                                Text(s.showTabBar),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '隐藏时用顶栏按钮切换「我的壁纸 / 壁纸库」',
+                                  s.showTabBarHint,
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: scheme.onSurfaceVariant,
@@ -349,14 +363,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _sectionLabel(context, '性能档位'),
+                  _sectionLabel(context, s.languageTitle),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: lgw.GlassGroupedSection(
+                      surfaceStyle: lgw.GlassSurfaceStyle.solid,
+                      shape: glassShape(radius: 28),
+                      children: [
+                        lgw.GlassListTile(
+                          leading: appIcon(AppIcons.language),
+                          leadingIconColor: scheme.primary,
+                          title: Text(s.languageTitle),
+                          subtitle: Text(
+                            widget.localeController.preference ==
+                                    LocaleController.systemPreference
+                                ? '${s.languageSystem} · ${widget.localeController.displayName}'
+                                : widget.localeController.displayName,
+                          ),
+                          trailing: appIcon(
+                            AppIcons.chevronRight,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          onTap: _openLanguage,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _sectionLabel(context, s.performanceTier),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: lgw.GlassSegmentedControl(
-                      segments: const [
-                        lgw.GlassSegment(label: '高', id: 'high'),
-                        lgw.GlassSegment(label: '中', id: 'medium'),
-                        lgw.GlassSegment(label: '低', id: 'low'),
+                      segments: [
+                        lgw.GlassSegment(label: s.tierHigh, id: 'high'),
+                        lgw.GlassSegment(label: s.tierMedium, id: 'medium'),
+                        lgw.GlassSegment(label: s.tierLow, id: 'low'),
                       ],
                       selectedIndex: _tierIndex,
                       onSegmentSelected: (index) => _setTier(_tiers[index]),
@@ -370,10 +411,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
-                      '作用于壁纸运行时的各渲染路径（默认“中”）：\n'
-                      '· 视频壁纸：高/中 正常播放，低 → 静态首帧\n'
-                      '· 深度视差：30 / 20 / 15 fps（省电模式强制 15）\n'
-                      '· HTML：高 不限制，中 ~30fps，低 冻结 CSS 动画',
+                      s.performanceHintBody,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -382,14 +420,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _sectionLabel(context, '视频解码'),
+                  _sectionLabel(context, s.videoDecode),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: lgw.GlassSegmentedControl(
-                      segments: const [
-                        lgw.GlassSegment(label: '自动', id: 'auto'),
-                        lgw.GlassSegment(label: '硬解', id: 'hardware'),
-                        lgw.GlassSegment(label: '软解', id: 'software'),
+                      segments: [
+                        lgw.GlassSegment(label: s.decodeAuto, id: 'auto'),
+                        lgw.GlassSegment(
+                          label: s.decodeHardware,
+                          id: 'hardware',
+                        ),
+                        lgw.GlassSegment(
+                          label: s.decodeSoftware,
+                          id: 'software',
+                        ),
                       ],
                       selectedIndex: _decodeIndex,
                       onSegmentSelected: (index) =>
@@ -404,10 +448,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
-                      '自动：优先硬解，设备没有硬解时才用软解；运行中失败会提示。\n'
-                      '硬解：最省电，兼容性取决于设备解码器。\n'
-                      '软解：兼容性最广，但耗电、发热明显，高分辨率视频可能掉帧。\n'
-                      '音量仍由每个壁纸包的参数控制，默认静音。',
+                      s.decodeHintBody,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -427,10 +468,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('解码失败时提示'),
+                                Text(s.decodePrompt),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '回到 App 时提示切换软件解码',
+                                  s.decodePromptHint,
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: scheme.onSurfaceVariant,
@@ -452,14 +493,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _sectionLabel(context, '深度视差'),
+                  _sectionLabel(context, s.depthParallax),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: lgw.GlassSegmentedControl(
-                      segments: const [
-                        lgw.GlassSegment(label: '弱', id: 'soft'),
-                        lgw.GlassSegment(label: '标准', id: 'standard'),
-                        lgw.GlassSegment(label: '强', id: 'strong'),
+                      segments: [
+                        lgw.GlassSegment(label: s.depthSoft, id: 'soft'),
+                        lgw.GlassSegment(
+                          label: s.depthStandard,
+                          id: 'standard',
+                        ),
+                        lgw.GlassSegment(label: s.depthStrong, id: 'strong'),
                       ],
                       selectedIndex: _depthIndex,
                       onSegmentSelected: _setDepthScale,
@@ -473,8 +517,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
-                      '全局倍率，叠加在每个深度包自己的视差强度上；'
-                      '觉得桌面晃动太明显时选“弱”。',
+                      s.depthHint,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -483,7 +526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _sectionLabel(context, '壁纸库地址'),
+                  _sectionLabel(context, s.libraryAddress),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: GlassSurface(
@@ -495,8 +538,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         enableSuggestions: false,
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _saveUrl(),
-                        decoration: const InputDecoration(
-                          hintText: 'https://api.example.com',
+                        decoration: InputDecoration(
+                          hintText: s.addressHint,
                           // 主题给输入框默认加了填充与描边；放在玻璃卡里
                           // 会把卡面画成实心色块，这里只保留光标和文字。
                           filled: false,
@@ -514,12 +557,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
                       widget.endpoint.isConfigured
-                          ? '当前生效：${widget.endpoint.url}\n'
-                                '地址指向你自己部署的 zuno-api（Docker 或 Cloudflare'
-                                ' Workers，部署步骤见 README）；保存后会立即重建目录。'
-                                '未配置时壁纸库页会显示引导。'
-                          : '尚未配置。填入你自己部署的 zuno-api 服务地址'
-                                '（部署步骤见 README「后端部署」）；保存后会立即重建目录。',
+                          ? s.addressConfigured(widget.endpoint.url)
+                          : s.addressNotConfigured,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -529,11 +568,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   lgw.GlassGroupedSection(
-                    header: const Text('电池优化'),
-                    footer: const Text(
-                      '定时壁纸需要后台运行才能准时切换；加入电池优化白名单，'
-                      '可避免系统休眠时把切换推迟到很久以后。',
-                    ),
+                    header: Text(s.batteryOptimization),
+                    footer: Text(s.batteryFooter),
                     // iOS 原生分组卡是平实不透明面：纯文字/行卡片走 solid，
                     // 不吃玻璃雾（premium frost 会把卡面文字糊成雾中残影）。
                     surfaceStyle: lgw.GlassSurfaceStyle.solid,
@@ -549,12 +585,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? const Color(0xFF34C759)
                             : const Color(0xFFFF9500),
                         title: Text(
-                          _batteryIgnored ? '已加入电池优化白名单' : '未加入电池优化白名单',
+                          _batteryIgnored
+                              ? s.batteryAllowed
+                              : s.batteryNotAllowed,
                         ),
                         trailing: _batteryIgnored
                             ? null
                             : Text(
-                                '去设置',
+                                s.goSettings,
                                 style: TextStyle(
                                   color: scheme.primary,
                                   fontWeight: FontWeight.w600,
@@ -569,19 +607,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     builder: (context, snap) {
                       final mb = (snap.data ?? 0) / (1024 * 1024);
                       return lgw.GlassGroupedSection(
-                        header: const Text('存储'),
+                        header: Text(s.storage),
                         surfaceStyle: lgw.GlassSurfaceStyle.solid,
                         shape: glassShape(radius: 28),
                         children: [
                           lgw.GlassListTile(
                             leading: appIcon(AppIcons.database),
                             leadingIconColor: scheme.primary,
-                            title: const Text('壁纸库占用'),
-                            subtitle: const Text('已安装壁纸包文件（应用私有目录）'),
+                            title: Text(s.libraryUsage),
+                            subtitle: Text(s.libraryUsageSubtitle),
                             trailing: Text(
                               snap.hasData
                                   ? '${mb.toStringAsFixed(1)} MB'
-                                  : '统计中…',
+                                  : s.calculating,
                               style: TextStyle(
                                 color: scheme.onSurfaceVariant,
                                 fontSize: 14,
@@ -599,8 +637,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       lgw.GlassListTile(
                         leading: appIcon(AppIcons.info),
                         leadingIconColor: scheme.primary,
-                        title: const Text('关于 ZUNO'),
-                        subtitle: const Text('版本信息 · 交流群'),
+                        title: Text(s.aboutZuno),
+                        subtitle: Text(s.aboutZunoSubtitle),
                         trailing: appIcon(
                           AppIcons.chevronRight,
                           color: scheme.onSurfaceVariant,

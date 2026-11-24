@@ -12,6 +12,7 @@ import 'package:zuno/services/remote_api.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/locale_controller.dart';
 import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 
@@ -31,6 +32,8 @@ Future<void> main() async {
   final catalog = CatalogController(api);
   // 外观模式必须在首帧前读取：先渲染浅色再切深色会白闪一下。
   final themeController = await ThemeController.load();
+  // 显示语言同样在首帧前恢复：否则会先按系统语言渲染一帧再跳变。
+  final localeController = await LocaleController.load();
   // 界面偏好（底部 TAB 显隐）：同样在首帧前读取，避免壳层先按默认值
   // 渲染一帧再跳变。
   final shellPrefs = await ShellPrefsController.load();
@@ -141,6 +144,7 @@ Future<void> main() async {
       child: ZunoApp(
         controller: controller,
         themeController: themeController,
+        localeController: localeController,
         endpoint: endpoint,
         catalog: catalog,
         shellPrefs: shellPrefs,

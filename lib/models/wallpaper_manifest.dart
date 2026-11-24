@@ -1,3 +1,4 @@
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/wallpaper_type.dart';
 
 /// manifest.json 解析模型（ZUNO Package v1）。
@@ -22,7 +23,12 @@ class WallpaperAuthor {
 
   static WallpaperAuthor? parse(Object? raw) {
     if (raw == null) return null;
-    if (raw is! Map) throw ManifestFormatException('author', '必须是对象');
+    if (raw is! Map) {
+      throw ManifestFormatException(
+        'author',
+        ZunoStrings.current.reasonMustBeObject,
+      );
+    }
     final map = Map<String, dynamic>.from(raw);
     return WallpaperAuthor(
       id: _optString(map, 'id'),
@@ -57,19 +63,25 @@ class ConfigParam {
 
   static ConfigParam parse(Object? raw, int index) {
     if (raw is! Map) {
-      throw ManifestFormatException('config[$index]', '必须是对象');
+      throw ManifestFormatException(
+        'config[$index]',
+        ZunoStrings.current.reasonConfigObject(index),
+      );
     }
     final map = Map<String, dynamic>.from(raw);
     final key = map['key'];
     if (key is! String || key.isEmpty) {
-      throw ManifestFormatException('config[$index].key', '必需且为字符串');
+      throw ManifestFormatException(
+        'config[$index].key',
+        ZunoStrings.current.reasonConfigKey(index),
+      );
     }
     final type = map['type'];
     if (type is! String ||
         !const {'float', 'int', 'bool', 'color'}.contains(type)) {
       throw ManifestFormatException(
         'config[$index].type',
-        '必须是 float/int/bool/color 之一，实际: $type',
+        ZunoStrings.current.reasonConfigType(index, type),
       );
     }
     final dynamic def = map['default'];
@@ -79,21 +91,21 @@ class ConfigParam {
         if (def != null && def is! num) {
           throw ManifestFormatException(
             'config[$index].default',
-            'float 参数的 default 必须是数字',
+            ZunoStrings.current.reasonDefaultFloat,
           );
         }
       case 'int':
         if (def != null && (def is! num || def.toInt() != def)) {
           throw ManifestFormatException(
             'config[$index].default',
-            'int 参数的 default 必须是整数',
+            ZunoStrings.current.reasonDefaultInt,
           );
         }
       case 'bool':
         if (def != null && def is! bool) {
           throw ManifestFormatException(
             'config[$index].default',
-            'bool 参数的 default 必须是布尔',
+            ZunoStrings.current.reasonDefaultBool,
           );
         }
       case 'color':
@@ -101,14 +113,17 @@ class ConfigParam {
             (def is! String || !RegExp(r'^#[0-9a-fA-F]{6,8}$').hasMatch(def))) {
           throw ManifestFormatException(
             'config[$index].default',
-            'color 参数的 default 必须是 #RRGGBB(AA)',
+            ZunoStrings.current.reasonDefaultColor,
           );
         }
     }
     final min = _optNum(map, 'min');
     final max = _optNum(map, 'max');
     if (min != null && max != null && min > max) {
-      throw ManifestFormatException('config[$index]', 'min > max');
+      throw ManifestFormatException(
+        'config[$index]',
+        ZunoStrings.current.reasonMinMax,
+      );
     }
     return ConfigParam(
       key: key,
@@ -146,7 +161,12 @@ class Capabilities {
 
   static Capabilities parse(Object? raw) {
     if (raw == null) return const Capabilities();
-    if (raw is! Map) throw ManifestFormatException('capabilities', '必须是对象');
+    if (raw is! Map) {
+      throw ManifestFormatException(
+        'capabilities',
+        ZunoStrings.current.reasonCapabilitiesObject,
+      );
+    }
     final map = Map<String, dynamic>.from(raw);
     return Capabilities(
       network: _stringList(map['network'], 'capabilities.network'),
@@ -159,10 +179,18 @@ class Capabilities {
   /// （而不是让 `List<String>.from` 抛 TypeError 逃过校验层导致导入崩溃）。
   static List<String> _stringList(Object? raw, String field) {
     if (raw == null) return const [];
-    if (raw is! List) throw ManifestFormatException(field, '必须是字符串数组');
+    if (raw is! List) {
+      throw ManifestFormatException(
+        field,
+        ZunoStrings.current.reasonStringArray,
+      );
+    }
     for (final e in raw) {
       if (e is! String) {
-        throw ManifestFormatException(field, '元素必须是字符串，实际: $e');
+        throw ManifestFormatException(
+          field,
+          ZunoStrings.current.reasonElementString(e),
+        );
       }
     }
     return List<String>.from(raw);
@@ -211,7 +239,7 @@ class WallpaperManifest {
     if (schemaVersion != 1) {
       throw ManifestFormatException(
         'schemaVersion',
-        '当前仅支持 1，实际: $schemaVersion',
+        ZunoStrings.current.reasonSchemaOnly1(schemaVersion),
       );
     }
     final id = _reqString(raw, 'id');
@@ -220,7 +248,7 @@ class WallpaperManifest {
     if (!RegExp(r'^[A-Za-z0-9_.]+$').hasMatch(id) || id == '.' || id == '..') {
       throw ManifestFormatException(
         'id',
-        '只允许字母/数字/点/下划线且不能是 "." 或 ".."，实际: $id',
+        ZunoStrings.current.reasonIdCharset(id),
       );
     }
     final version = _reqString(raw, 'version');
@@ -228,24 +256,30 @@ class WallpaperManifest {
     if (!RegExp(r'^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$').hasMatch(version)) {
       throw ManifestFormatException(
         'version',
-        '必须为语义化版本（如 1.0.0），实际: $version',
+        ZunoStrings.current.reasonSemver(version),
       );
     }
     final type = WallpaperType.tryParse(_reqString(raw, 'type'));
     if (type == null) {
-      throw ManifestFormatException('type', '必须是 video/html/depth/timed 之一');
+      throw ManifestFormatException(
+        'type',
+        ZunoStrings.current.reasonTypeOneOf,
+      );
     }
     final minSdk = _optInt(raw, 'minSdk') ?? 24;
     final hint = _optString(raw, 'performanceHint') ?? 'medium';
     if (!const {'low', 'medium', 'high'}.contains(hint)) {
       throw ManifestFormatException(
         'performanceHint',
-        '必须是 low/medium/high，实际: $hint',
+        ZunoStrings.current.reasonPerformanceHint(hint),
       );
     }
     final configRaw = raw['config'];
     if (configRaw != null && configRaw is! List) {
-      throw ManifestFormatException('config', '必须是数组');
+      throw ManifestFormatException(
+        'config',
+        ZunoStrings.current.reasonConfigArray,
+      );
     }
     final configList = (configRaw as List? ?? const [])
         .asMap()
@@ -255,7 +289,10 @@ class WallpaperManifest {
     // config key 去重。
     final keys = configList.map((c) => c.key).toSet();
     if (keys.length != configList.length) {
-      throw ManifestFormatException('config', '存在重复的 key');
+      throw ManifestFormatException(
+        'config',
+        ZunoStrings.current.reasonDuplicateKeys,
+      );
     }
     return WallpaperManifest(
       schemaVersion: schemaVersion,
@@ -294,7 +331,10 @@ class WallpaperManifest {
 String _reqString(Map<String, dynamic> raw, String field) {
   final v = raw[field];
   if (v is! String || v.isEmpty) {
-    throw ManifestFormatException(field, '必需且为非空字符串，实际: $v');
+    throw ManifestFormatException(
+      field,
+      ZunoStrings.current.reasonRequiredString(v),
+    );
   }
   return v;
 }
@@ -302,14 +342,22 @@ String _reqString(Map<String, dynamic> raw, String field) {
 String? _optString(Map<String, dynamic> raw, String field) {
   final v = raw[field];
   if (v == null) return null;
-  if (v is! String) throw ManifestFormatException(field, '必须为字符串，实际: $v');
+  if (v is! String) {
+    throw ManifestFormatException(
+      field,
+      ZunoStrings.current.reasonMustBeString(v),
+    );
+  }
   return v;
 }
 
 int _reqInt(Map<String, dynamic> raw, String field) {
   final v = raw[field];
   if (v is! num || v.toInt() != v) {
-    throw ManifestFormatException(field, '必需且为整数，实际: $v');
+    throw ManifestFormatException(
+      field,
+      ZunoStrings.current.reasonRequiredInt(v),
+    );
   }
   return v.toInt();
 }
@@ -318,7 +366,10 @@ int? _optInt(Map<String, dynamic> raw, String field) {
   final v = raw[field];
   if (v == null) return null;
   if (v is! num || v.toInt() != v) {
-    throw ManifestFormatException(field, '必须为整数，实际: $v');
+    throw ManifestFormatException(
+      field,
+      ZunoStrings.current.reasonMustBeInt(v),
+    );
   }
   return v.toInt();
 }
@@ -326,6 +377,11 @@ int? _optInt(Map<String, dynamic> raw, String field) {
 num? _optNum(Map<String, dynamic> raw, String field) {
   final v = raw[field];
   if (v == null) return null;
-  if (v is! num) throw ManifestFormatException(field, '必须为数字，实际: $v');
+  if (v is! num) {
+    throw ManifestFormatException(
+      field,
+      ZunoStrings.current.reasonMustBeNumber(v),
+    );
+  }
   return v;
 }

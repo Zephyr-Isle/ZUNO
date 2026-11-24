@@ -32,6 +32,7 @@ class AppIcons {
   static const batteryWarning = HugeIcons.strokeRoundedBatteryWarning;
   static const database = HugeIcons.strokeRoundedDatabase;
   static const info = HugeIcons.strokeRoundedInfo;
+  static const language = HugeIcons.strokeRoundedLanguageCircle;
   static const chevronRight = HugeIcons.strokeRoundedChevronRight;
   static const group = HugeIcons.strokeRoundedUserGroup;
   static const dot = HugeIcons.strokeRoundedDot;

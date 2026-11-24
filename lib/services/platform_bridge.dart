@@ -267,6 +267,23 @@ class ZunoNative {
   static Future<void> setShowTabBar(bool visible) =>
       _channel.invokeMethod<void>('setShowTabBar', {'visible': visible});
 
+  // ------------------------------------------------------------ 显示语言
+  //
+  // 存在原生 `zuno_config`（`app.language`）：值为 "system" 或受支持的
+  // 语言代码（en / zh / zh_Hant / ja / ko / es / fr / de）。首帧前读取，
+  // 避免先按英文渲染再跳变。
+
+  static Future<String?> getAppLanguage() async {
+    try {
+      return await _channel.invokeMethod<String>('getAppLanguage');
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  static Future<void> setAppLanguage(String code) =>
+      _channel.invokeMethod<void>('setAppLanguage', {'code': code});
+
   // ------------------------------------------------------------ 账号会话
   //
   // 存在原生 `zuno_auth` prefs（应用私有目录）。为什么不放 D1/远端：

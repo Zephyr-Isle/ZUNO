@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
+
 /// 视频壁纸的 App 内预览（video_player 软解走 Flutter 纹理）。
 ///
 /// 注意：这只是库管理页的小窗预览。真机壁纸由原生 ExoPlayer（默认硬解、
@@ -58,7 +60,7 @@ class _VideoPreviewState extends State<VideoPreview> {
       await controller.play();
       if (mounted) setState(() {});
     } catch (e) {
-      _error = '视频预览初始化失败：$e';
+      _error = ZunoStrings.current.videoPreviewInitFailed(e);
       if (mounted) setState(() {});
     }
   }
@@ -117,7 +119,9 @@ class _VideoPreviewState extends State<VideoPreview> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 color: Colors.black54,
                 child: Text(
-                  _error != null ? '当前设备不支持实时播放此视频，壁纸将显示为静态画面' : '正在加载视频…',
+                  _error != null
+                      ? ZunoLocalizations.of(context).videoUnsupported
+                      : ZunoLocalizations.of(context).videoLoading,
                   style: Theme.of(context).textTheme.bodySmall,
                   textAlign: TextAlign.center,
                 ),

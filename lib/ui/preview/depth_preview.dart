@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
+
 /// 深度视差壁纸的 App 内预览（仅参考）。
 ///
 /// 预览刻意做成 Widget 层的“整体平移”近似：真机壁纸走原生 OpenGL ES 的
@@ -129,9 +131,11 @@ class _DepthPreviewState extends State<DepthPreview> {
               File(widget.colorPath),
               fit: BoxFit.cover,
               cacheWidth: 720,
-              errorBuilder: (_, _, _) => const ColoredBox(
+              errorBuilder: (_, _, _) => ColoredBox(
                 color: Colors.black,
-                child: Center(child: Text('颜色图加载失败')),
+                child: Center(
+                  child: Text(ZunoLocalizations.of(context).colorImageLoadFailed),
+                ),
               ),
             ),
           ),
@@ -142,9 +146,9 @@ class _DepthPreviewState extends State<DepthPreview> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             color: Colors.black54,
-            child: const Text(
-              '预览为近似效果，实际壁纸更细腻',
-              style: TextStyle(fontSize: 10),
+            child: Text(
+              ZunoLocalizations.of(context).depthApproxHint,
+              style: const TextStyle(fontSize: 10),
             ),
           ),
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/state/auth_controller.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
@@ -71,16 +72,17 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     final email = _email.text.trim();
     final password = _password.text;
+    final s = ZunoLocalizations.of(context);
     if (!_emailPattern.hasMatch(email)) {
-      setState(() => _localError = '邮箱格式不正确');
+      setState(() => _localError = s.emailInvalid);
       return;
     }
     if (password.length < 8) {
-      setState(() => _localError = '密码长度需为 8–128 个字符');
+      setState(() => _localError = s.passwordLength);
       return;
     }
     if (_mode == 1 && password != _confirm.text) {
-      setState(() => _localError = '两次输入的密码不一致');
+      setState(() => _localError = s.passwordMismatch);
       return;
     }
     setState(() => _localError = null);
@@ -97,6 +99,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     final busy = widget.auth.busy;
     final error = _localError ?? widget.auth.error;
     // extendBody 后内容滚进玻璃导航栏下方由 soft 边缘淡出收尾。
@@ -107,10 +110,10 @@ class _AuthScreenState extends State<AuthScreen> {
       statusBarStyle: zunoStatusBarStyle(context),
       extendBody: true,
       appBar: lgw.GlassAppBar(
-        title: Text(_mode == 0 ? '登录' : '注册'),
+        title: Text(_mode == 0 ? s.login : s.register),
         leading: GlassCircleButton(
           icon: AppIcons.back,
-          semanticLabel: '返回',
+          semanticLabel: s.back,
           onPressed: () => Navigator.maybePop(context),
         ),
       ),
@@ -127,9 +130,9 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
           children: [
             lgw.GlassSegmentedControl(
-              segments: const [
-                lgw.GlassSegment(label: '登录', id: 'login'),
-                lgw.GlassSegment(label: '注册', id: 'register'),
+              segments: [
+                lgw.GlassSegment(label: s.login, id: 'login'),
+                lgw.GlassSegment(label: s.register, id: 'register'),
               ],
               selectedIndex: _mode,
               onSegmentSelected: _setMode,
@@ -148,7 +151,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     enableSuggestions: false,
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
-                      hintText: '邮箱',
+                      hintText: s.email,
                       prefixIcon: Padding(
                         padding: const EdgeInsets.all(12),
                         child: appIcon(
@@ -172,7 +175,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       if (_mode == 0) _submit();
                     },
                     decoration: InputDecoration(
-                      hintText: _mode == 1 ? '密码（至少 8 位）' : '密码',
+                      hintText: _mode == 1 ? s.passwordMin : s.password,
                       prefixIcon: Padding(
                         padding: const EdgeInsets.all(12),
                         child: appIcon(
@@ -201,7 +204,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
-                        hintText: '再输入一次密码',
+                        hintText: s.confirmPassword,
                         prefixIcon: Padding(
                           padding: const EdgeInsets.all(12),
                           child: appIcon(
@@ -236,8 +239,8 @@ class _AuthScreenState extends State<AuthScreen> {
             GlassPrimaryButton(
               icon: _mode == 0 ? AppIcons.login : AppIcons.userCircle,
               label: busy
-                  ? (_mode == 0 ? '正在登录…' : '正在创建…')
-                  : (_mode == 0 ? '登录' : '创建账号'),
+                  ? (_mode == 0 ? s.signingIn : s.creating)
+                  : (_mode == 0 ? s.login : s.createAccount),
               // 玻璃按钮没有 disabled 态：忙碌时挂空回调，避免重复提交。
               onPressed: busy ? () {} : _submit,
             ),
@@ -245,8 +248,7 @@ class _AuthScreenState extends State<AuthScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                '账号用于在线壁纸库与下载票据。'
-                '上传壁纸与用户管理属于管理端功能（Admin Secret），客户端不提供入口。',
+                s.authNote,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,

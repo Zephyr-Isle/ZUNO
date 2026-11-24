@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/wallpaper_package/timed_schedule.dart';
@@ -28,7 +29,7 @@ class WallpaperApplier {
       // timedParentDir 记录父包根目录，交给 WorkManager 周期任务后续切换。
       final slot = await ZunoNative.resolveTimedSlot(entry.packageDir);
       if (slot == null) {
-        return const ApplyResult.failure('未能解析出当前时段的子壁纸（可能受充电约束限制，请连接充电器后重试）');
+        return ApplyResult.failure(ZunoStrings.current.applyTimedFailed);
       }
       id = slot['slotId'] as String? ?? id;
       type = slot['type'] as String? ?? type;

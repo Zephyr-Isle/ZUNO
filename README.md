@@ -24,6 +24,7 @@
 ## Table of contents
 
 - [Features](#features)
+- [Languages](#languages)
 - [Screenshots](#screenshots)
 - [Download & install](#download--install)
   - [Sample wallpaper packs](#sample-wallpaper-packs)
@@ -54,6 +55,26 @@
 - **Timed wallpapers** — WorkManager rotates sub-wallpapers ("slots") on schedule, hot-swapped in-process via `ConfigBus`. Platform minimum interval is 15 minutes.
 - **Wallpaper packages** — a `.zuno` file is a plain ZIP with a manifest and checksum. Import blocks Zip Slip, path traversal, excessive `minSdk`, and recursively validates `timed` sub-packages.
 - **Cloud catalog** — browsing and downloading need no account; download tickets expire in 5 minutes. Upload and deletion live in a separate desktop admin tool.
+- **8 UI languages** — English, Simplified/Traditional Chinese, Japanese, Korean, Spanish, French and German, switchable in-app or following the system.
+
+## Languages
+
+The interface is available in 8 languages:
+
+| Language | Code | Native name |
+|---|---|---|
+| English | `en` | English |
+| Simplified Chinese | `zh` | 简体中文 |
+| Traditional Chinese | `zh_Hant` | 繁體中文 |
+| Japanese | `ja` | 日本語 |
+| Korean | `ko` | 한국어 |
+| Spanish | `es` | Español |
+| French | `fr` | Français |
+| German | `de` | Deutsch |
+
+By default the app follows the system language. To override it, open **Settings → Language** and choose a language (or switch back to **Follow system**). The preference is stored in native config and loaded before the first frame, so the UI never flashes the wrong language at launch.
+
+String catalogues live in `lib/l10n/strings_<code>.dart`; `ZunoStrings` is pure Dart (no Flutter imports) because ZIP import runs in a background isolate, which receives the active language code explicitly. To add a language, copy `strings_en.dart`, translate the values, then register the code in `ZunoStrings.supportedLanguageCodes` / `nativeNames` and add the locale to `ZunoLocalizations.supportedLocales`.
 
 ## Screenshots
 

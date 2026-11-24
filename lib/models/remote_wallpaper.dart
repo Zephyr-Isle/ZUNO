@@ -1,3 +1,5 @@
+import 'package:zuno/l10n/zuno_strings.dart';
+
 // 云端壁纸目录的数据模型（对应 zuno-api 的 JSON 契约）。
 //
 // 后端不下发 `webdav_path` / `cover_path`（见 internal-docs/docs/backend.md）：客户端只拿
@@ -137,7 +139,7 @@ class DownloadTicket {
 
 /// 人类可读的字节数。壁纸包从几十 KB（HTML）到几十 MB（视频）都有。
 String formatBytes(int bytes) {
-  if (bytes <= 0) return '大小未知';
+  if (bytes <= 0) return ZunoStrings.current.errSizeUnknown;
   const units = ['B', 'KB', 'MB', 'GB'];
   var value = bytes.toDouble();
   var unit = 0;

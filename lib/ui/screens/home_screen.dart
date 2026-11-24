@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/state/library_controller.dart';
 import 'package:zuno/ui/screens/wallpaper_detail_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
@@ -95,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // lastImportResult 非空但不是失败报告：文件无法读取等边缘情况。
       lgw.GlassToast.show(
         context,
-        message: '导入失败：文件无法读取',
+        message: ZunoLocalizations.of(context).importFailedUnreadable,
         type: lgw.GlassToastType.error,
       );
     }
@@ -103,9 +104,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showWarnings(List<String> warnings) {
+    final s = ZunoLocalizations.of(context);
     return lgw.GlassDialog.show<void>(
       context: context,
-      title: '导入成功，但有提醒',
+      title: s.importSuccessWarnings,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       actions: [
         lgw.GlassDialogAction(
-          label: '知道了',
+          label: s.gotIt,
           isPrimary: true,
           onPressed: () => Navigator.pop(context),
         ),
@@ -125,6 +127,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _showIssues(ImportFailure failure) {
+    final s = ZunoLocalizations.of(context);
     lgw.GlassModalSheet.show<void>(
       context: context,
       halfSize: 0.55,
@@ -140,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '导入被拒绝',
+                  s.importRejected,
                   style: Theme.of(sheetContext).textTheme.titleMedium,
                 ),
               ],
@@ -161,6 +164,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    final s = ZunoLocalizations.of(context);
     // 外壳（MainShellScreen）已经提供 GlassScaffold、顶部导航栏和底部
     // TAB，且 extendBody: true：body 铺满整屏，滚动内容会钻进玻璃栏下方，
     // 由外壳的 soft 边缘淡出收尾。这里用 MediaQuery 补出两根栏的高度，
@@ -185,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       const CircularProgressIndicator(),
                       const SizedBox(height: 16),
-                      const Text('正在解压并校验壁纸包（后台 isolate）…'),
+                      Text(s.importingPackage),
                     ],
                   ),
                 );
@@ -236,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             bottom: bottomBarTotal + 12,
             child: GlassPrimaryButton(
               icon: AppIcons.importBox,
-              label: '导入 .zuno',
+              label: s.importZuno,
               onPressed: _import,
             ),
           ),
@@ -251,6 +255,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = ZunoLocalizations.of(context);
     // extendBody 后 body 铺满整屏：底部让出 TAB + 悬浮导入按钮的高度，
     // 空态内容才不会撞在玻璃栏上。
     final clearBottom =
@@ -263,11 +268,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             appIcon(AppIcons.image, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text('壁纸库为空', style: theme.textTheme.titleLarge),
+            Text(s.emptyLibraryTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              '导入符合 ZUNO Package v1 规格的 .zuno 包\n'
-              '支持 视频 / 深度视差 / HTML / 定时 四种类型',
+              s.emptyLibraryBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

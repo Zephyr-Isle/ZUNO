@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/state/auth_controller.dart';
 import 'package:zuno/ui/screens/auth_screen.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
@@ -18,17 +19,18 @@ class ProfileScreen extends StatelessWidget {
   final AuthController auth;
 
   Future<void> _logout(BuildContext context) async {
+    final s = ZunoLocalizations.of(context);
     final confirmed = await lgw.GlassDialog.show<bool>(
       context: context,
-      title: '退出登录？',
-      message: '退出后需要重新登录才能下载在线壁纸；已安装的壁纸不受影响。',
+      title: s.logoutTitle,
+      message: s.logoutBody,
       actions: [
         lgw.GlassDialogAction(
-          label: '取消',
+          label: s.cancel,
           onPressed: () => Navigator.pop(context, false),
         ),
         lgw.GlassDialogAction(
-          label: '退出登录',
+          label: s.logout,
           isDestructive: true,
           onPressed: () => Navigator.pop(context, true),
         ),
@@ -43,6 +45,7 @@ class ProfileScreen extends StatelessWidget {
       listenable: auth,
       builder: (context, _) {
         final scheme = Theme.of(context).colorScheme;
+        final s = ZunoLocalizations.of(context);
         final signedIn = auth.signedIn;
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -52,28 +55,28 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 14),
               GlassPrimaryButton(
                 icon: AppIcons.login,
-                label: '登录 / 注册',
+                label: s.loginRegister,
                 onPressed: () => AuthScreen.open(context, auth),
               ),
             ],
             if (signedIn) ...[
               const SizedBox(height: 14),
               lgw.GlassGroupedSection(
-                header: const Text('账号'),
+                header: Text(s.account),
                 shape: glassShape(radius: 28),
                 quality: lgw.GlassQuality.standard,
                 children: [
                   lgw.GlassListTile(
                     leading: appIcon(AppIcons.mail),
                     leadingIconColor: scheme.primary,
-                    title: const Text('邮箱'),
+                    title: Text(s.email),
                     subtitle: Text(auth.email),
                   ),
                   lgw.GlassListTile(
                     leading: appIcon(AppIcons.clock),
                     leadingIconColor: scheme.primary,
-                    title: const Text('会话有效期'),
-                    subtitle: Text('剩余 ${auth.daysLeft} 天，到期后需重新登录'),
+                    title: Text(s.sessionValidity),
+                    subtitle: Text(s.sessionDaysLeft(auth.daysLeft)),
                   ),
                 ],
               ),
@@ -86,7 +89,7 @@ class ProfileScreen extends StatelessWidget {
                     leading: appIcon(AppIcons.logout),
                     leadingIconColor: scheme.error,
                     title: Text(
-                      '退出登录',
+                      s.logout,
                       style: TextStyle(color: scheme.error),
                     ),
                     onTap: () => _logout(context),
@@ -111,6 +114,7 @@ class _AccountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     final signedIn = auth.signedIn;
     final email = auth.email;
     // 头像占位：邮箱首字母。空邮箱（理论上不会出现）回落到图标。
@@ -155,7 +159,7 @@ class _AccountCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  signedIn ? email : '未登录',
+                  signedIn ? email : s.notSignedIn,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -165,8 +169,8 @@ class _AccountCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   signedIn
-                      ? '免费账号 · 剩余 ${auth.daysLeft} 天'
-                      : '登录后可下载在线壁纸，浏览不受限',
+                      ? s.freeAccountDays(auth.daysLeft)
+                      : s.loginToDownload,
                   style: TextStyle(
                     fontSize: 12.5,
                     color: scheme.onSurfaceVariant,
@@ -188,8 +192,9 @@ class _ManagementSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     final badge = Text(
-      '管理端',
+      s.adminBadge,
       style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w600,
@@ -197,26 +202,23 @@ class _ManagementSection extends StatelessWidget {
       ),
     );
     return lgw.GlassGroupedSection(
-      header: const Text('管理功能'),
-      footer: const Text(
-        '上传与会话管理依赖服务端的 ADMIN_SECRET：壁纸包由管理端直接写入 WebDAV，'
-        '再调用 /api/admin/sync 落地元数据，全程不经过客户端。',
-      ),
+      header: Text(s.management),
+      footer: Text(s.managementFooter),
       shape: glassShape(radius: 28),
       quality: lgw.GlassQuality.standard,
       children: [
         lgw.GlassListTile(
           leading: appIcon(AppIcons.upload),
           leadingIconColor: scheme.primary.withValues(alpha: 0.6),
-          title: const Text('上传壁纸'),
-          subtitle: const Text('WebDAV 直传 + 后台同步'),
+          title: Text(s.uploadWallpaper),
+          subtitle: Text(s.uploadSubtitle),
           trailing: badge,
         ),
         lgw.GlassListTile(
           leading: appIcon(AppIcons.group),
           leadingIconColor: scheme.primary.withValues(alpha: 0.6),
-          title: const Text('用户管理'),
-          subtitle: const Text('D1 users 表，仅管理后台'),
+          title: Text(s.userManagement),
+          subtitle: Text(s.userManagementSubtitle),
           trailing: badge,
         ),
       ],

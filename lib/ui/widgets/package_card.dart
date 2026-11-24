@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
@@ -41,9 +42,10 @@ class _PackageCardState extends State<PackageCard> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     return Semantics(
       button: true,
-      label: '壁纸 ${entry.title}',
+      label: '${s.wallpaperLibrary}: ${entry.title}',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
@@ -102,7 +104,7 @@ class _PackageCardState extends State<PackageCard> {
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
-                                  '使用中',
+                                  s.inUse,
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: scheme.onPrimary,

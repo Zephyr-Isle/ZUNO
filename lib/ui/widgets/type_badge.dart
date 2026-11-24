@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
+
 /// 壁纸类型徽标（video / html / depth / timed）。
 ///
 /// iOS 风格的“软标签”：淡色底 + 同色文字、无描边，比带边框的胶囊更轻。
@@ -12,11 +14,28 @@ class TypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final strings = ZunoLocalizations.of(context);
     final (label, lightColor, darkColor) = switch (type) {
-      'video' => ('视频', const Color(0xFF5B4BE0), const Color(0xFFB4A7FF)),
-      'html' => ('HTML', const Color(0xFF0B8578), const Color(0xFF5EEAD4)),
-      'depth' => ('视差', const Color(0xFF1D6FE0), const Color(0xFF8CB8FF)),
-      'timed' => ('定时', const Color(0xFFB45309), const Color(0xFFFCD34D)),
+      'video' => (
+        strings.typeVideo,
+        const Color(0xFF5B4BE0),
+        const Color(0xFFB4A7FF),
+      ),
+      'html' => (
+        strings.typeHtml,
+        const Color(0xFF0B8578),
+        const Color(0xFF5EEAD4),
+      ),
+      'depth' => (
+        strings.typeDepth,
+        const Color(0xFF1D6FE0),
+        const Color(0xFF8CB8FF),
+      ),
+      'timed' => (
+        strings.typeTimed,
+        const Color(0xFFB45309),
+        const Color(0xFFFCD34D),
+      ),
       _ => (type, const Color(0xFF6E6E73), const Color(0xFFB8B8BE)),
     };
     final color = dark ? darkColor : lightColor;

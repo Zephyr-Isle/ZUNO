@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:archive/archive_io.dart';
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/models/wallpaper_manifest.dart';
 import 'package:zuno/models/wallpaper_type.dart';
@@ -38,7 +39,13 @@ Future<Object> importZunoPackage({
   required String stagingParentPath,
   required String libraryRootPath,
   required int deviceApiLevel,
+  String? languageCode,
 }) async {
+  // 后台 isolate 没有 Flutter Locale：按调用方传入的语言代码恢复字符串表，
+  // 校验详情（会展示给用户）才会是用户选择的语言。
+  if (languageCode != null) {
+    ZunoStrings.current = ZunoStrings.forLanguage(languageCode);
+  }
   final issues = <ValidationIssue>[];
 
   // ---------- 1. 打开 ZIP（流式解码） ----------
@@ -48,7 +55,10 @@ Future<Object> importZunoPackage({
   final zipFile = File(zipPath);
   if (!zipFile.existsSync()) {
     return ImportFailure([
-      ValidationIssue(IssueCode.zipInvalid, '文件不存在: $zipPath'),
+      ValidationIssue(
+        IssueCode.zipInvalid,
+        ZunoStrings.current.errFileNotFound(zipPath),
+      ),
     ]);
   }
   final InputFileStream zipInput;
@@ -56,7 +66,7 @@ Future<Object> importZunoPackage({
     zipInput = InputFileStream(zipPath);
   } catch (e) {
     return ImportFailure([
-      ValidationIssue(IssueCode.zipInvalid, '无法打开 ZIP 文件: $e'),
+      ValidationIssue(IssueCode.zipInvalid, ZunoStrings.current.errOpenZip(e)),
     ]);
   }
   Archive archive;
@@ -65,7 +75,10 @@ Future<Object> importZunoPackage({
   } catch (e) {
     zipInput.closeSync();
     return ImportFailure([
-      ValidationIssue(IssueCode.zipInvalid, '不是合法的 ZIP 容器: $e'),
+      ValidationIssue(
+        IssueCode.zipInvalid,
+        ZunoStrings.current.errInvalidZip(e),
+      ),
     ]);
   }
 
@@ -82,9 +95,9 @@ Future<Object> importZunoPackage({
       entryCount++;
       if (entryCount > _maxEntryCount) {
         return ImportFailure([
-          const ValidationIssue(
+          ValidationIssue(
             IssueCode.zipInvalid,
-            '拒绝导入：ZIP 条目数超过上限（疑似 zip bomb）',
+            ZunoStrings.current.errTooManyEntries,
           ),
         ]);
       }
@@ -93,7 +106,7 @@ Future<Object> importZunoPackage({
         return ImportFailure([
           ValidationIssue(
             IssueCode.zipSlip,
-            '拒绝导入：条目 "${entry.name}" 含路径遍历/绝对路径',
+            ZunoStrings.current.errPathTraversal(entry.name),
           ),
         ]);
       }
@@ -103,16 +116,16 @@ Future<Object> importZunoPackage({
         return ImportFailure([
           ValidationIssue(
             IssueCode.zipInvalid,
-            '拒绝导入：条目 "${entry.name}" 解压后超过 $_maxEntryBytes 字节上限（疑似 zip bomb）',
+            ZunoStrings.current.errEntryTooLarge(entry.name, _maxEntryBytes),
           ),
         ]);
       }
       totalBytes += size;
       if (totalBytes > _maxTotalBytes) {
         return ImportFailure([
-          const ValidationIssue(
+          ValidationIssue(
             IssueCode.zipInvalid,
-            '拒绝导入：ZIP 解压总量超过上限（疑似 zip bomb）',
+            ZunoStrings.current.errTotalTooLarge,
           ),
         ]);
       }
@@ -120,7 +133,7 @@ Future<Object> importZunoPackage({
     }
     if (entries.isEmpty) {
       return ImportFailure([
-        const ValidationIssue(IssueCode.zipInvalid, 'ZIP 中没有任何文件'),
+        ValidationIssue(IssueCode.zipInvalid, ZunoStrings.current.errNoFiles),
       ]);
     }
 
@@ -147,16 +160,18 @@ Future<Object> importZunoPackage({
         basePrefix = '${topLevelWithManifest.first}/';
       } else if (topLevelWithManifest.isEmpty) {
         return ImportFailure([
-          const ValidationIssue(
+          ValidationIssue(
             IssueCode.manifestMissing,
-            '根目录（或单一顶层文件夹内）没有 manifest.json',
+            ZunoStrings.current.errManifestMissingRoot,
           ),
         ]);
       } else {
         return ImportFailure([
           ValidationIssue(
             IssueCode.manifestMissing,
-            '存在多个顶层文件夹含 manifest.json：${topLevelWithManifest.join(', ')}',
+            ZunoStrings.current.errManifestMultiple(
+              topLevelWithManifest.join(', '),
+            ),
           ),
         ]);
       }
@@ -195,15 +210,15 @@ Future<Object> importZunoPackage({
       return ImportFailure([
         ValidationIssue(
           IssueCode.manifestUnreadable,
-          'manifest.json 不是合法 JSON: $e',
+          ZunoStrings.current.errManifestJson(e),
         ),
       ]);
     }
     if (manifestRaw is! Map) {
       return ImportFailure([
-        const ValidationIssue(
+        ValidationIssue(
           IssueCode.manifestUnreadable,
-          'manifest.json 顶层必须是对象',
+          ZunoStrings.current.errManifestTopLevel,
         ),
       ]);
     }
@@ -227,9 +242,9 @@ Future<Object> importZunoPackage({
     if (manifest.type == WallpaperType.timed) {
       if (!packageFiles.contains('content/schedule.json')) {
         issues.add(
-          const ValidationIssue(
+          ValidationIssue(
             IssueCode.timedScheduleInvalid,
-            'timed 包必须包含 content/schedule.json',
+            ZunoStrings.current.errTimedNeedsSchedule,
           ),
         );
         return ImportFailure(issues);
@@ -262,7 +277,10 @@ Future<Object> importZunoPackage({
       for (final entity in staging.listSync(recursive: true)) {
         if (entity is File && !PathGuard.isInside(staging, entity)) {
           return ImportFailure([
-            const ValidationIssue(IssueCode.zipSlip, '解压后的路径逃逸出暂存目录'),
+            ValidationIssue(
+              IssueCode.zipSlip,
+              ZunoStrings.current.errPathEscapesStaging,
+            ),
           ]);
         }
       }
@@ -300,7 +318,12 @@ Future<Object> importZunoPackage({
       );
       return ImportOutcome(entry: entry, manifest: manifest);
     } catch (e) {
-      issues.add(ValidationIssue(IssueCode.unknown, '导入过程异常: $e'));
+      issues.add(
+        ValidationIssue(
+          IssueCode.unknown,
+          ZunoStrings.current.errImportException(e),
+        ),
+      );
       return ImportFailure(issues);
     } finally {
       // rename 成功后暂存目录已不存在；失败时清理现场。

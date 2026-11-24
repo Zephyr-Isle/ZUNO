@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/services/wallpaper_applier.dart';
@@ -154,7 +155,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       context,
       // 文案尽量短：GlassToast 的气泡宽受 maxWidth 约束，长文案在窄屏/
       // 大字体下会挤到两行上限之外，玻璃层跟着被撑出屏幕（提示气泡溢出）。
-      message: error ?? '即将打开系统预览，请点“设置壁纸”',
+      message: error ?? ZunoLocalizations.of(context).applyPreviewPrompt,
       type: error == null ? lgw.GlassToastType.info : lgw.GlassToastType.error,
     );
   }
@@ -173,7 +174,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       _dismissPackingToast();
       _packingToast = lgw.GlassToast.show(
         context,
-        message: '正在打包壁纸包（流式导出）…',
+        message: ZunoLocalizations.of(context).packingPackage,
         type: lgw.GlassToastType.info,
         duration: Duration.zero, // 大视频包打包耗时不可预估，完成后手动收起。
         dismissible: false,
@@ -188,7 +189,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       if (path == null) {
         lgw.GlassToast.show(
           context,
-          message: '导出失败',
+          message: ZunoLocalizations.of(context).exportFailed,
           type: lgw.GlassToastType.error,
         );
         return;
@@ -201,7 +202,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       if (!launched) {
         lgw.GlassToast.show(
           context,
-          message: '已导出到：$path',
+          message: ZunoLocalizations.of(context).exportedTo(path),
           type: lgw.GlassToastType.success,
         );
       }
@@ -211,17 +212,18 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   }
 
   Future<void> _delete() async {
+    final s = ZunoLocalizations.of(context);
     final confirmed = await lgw.GlassDialog.show<bool>(
       context: context,
-      title: '删除壁纸包？',
-      message: '${widget.entry.title} 及其文件将被一并删除。',
+      title: s.deletePackageTitle,
+      message: s.deletePackageBody(widget.entry.title),
       actions: [
         lgw.GlassDialogAction(
-          label: '取消',
+          label: s.cancel,
           onPressed: () => Navigator.pop(context, false),
         ),
         lgw.GlassDialogAction(
-          label: '删除',
+          label: s.delete,
           isDestructive: true,
           onPressed: () => Navigator.pop(context, true),
         ),
@@ -245,6 +247,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     // extendBody 后内容滚进玻璃栏下方由 soft 边缘淡出收尾；
     // ListView 自己让出 app bar 与底部 CTA 栏的高度。
     final mediaQuery = MediaQuery.of(context);
@@ -257,21 +260,21 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
         centerTitle: false,
         leading: GlassCircleButton(
           icon: AppIcons.back,
-          semanticLabel: '返回',
+          semanticLabel: s.back,
           onPressed: () => Navigator.maybePop(context),
         ),
         actions: [
           // 导出分享：重新打包为 .zuno（流式），经系统分享面板发出。
           GlassCircleButton(
             icon: AppIcons.share,
-            semanticLabel: '导出 / 分享',
+            semanticLabel: s.exportShare,
             onPressed: _share,
           ),
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: GlassCircleButton(
               icon: AppIcons.delete,
-              semanticLabel: '删除',
+              semanticLabel: s.delete,
               onPressed: _delete,
             ),
           ),
@@ -300,7 +303,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                 Text('v${entry.version}'),
                 const Spacer(),
                 Text(
-                  '性能建议: ${_hintLabel(entry.performanceHint)}',
+                  '${s.performanceHint}: ${s.hintLabel(entry.performanceHint)}',
                   style: TextStyle(
                     color: scheme.onSurfaceVariant,
                     fontSize: 12,
@@ -311,7 +314,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
             if (entry.authorHandle != null) ...[
               const SizedBox(height: 4),
               Text(
-                '作者: ${entry.authorHandle}',
+                '${s.authorLabel}: ${entry.authorHandle}',
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
             ],
@@ -332,7 +335,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
 
             // ---------- 可调参数 ----------
             if (entry.configParams.isNotEmpty) ...[
-              Text('参数', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                s.parameters,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               // 参数卡片用 solid（白底）而不是玻璃：里面的滑杆/开关本身是
               // 液态玻璃控件，玻璃套玻璃会产生双重折射。白底也正好对应
@@ -364,7 +370,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '点击后打开系统壁纸预览，点“设置壁纸”确认生效',
+                s.applyHint,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -383,7 +389,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                     Expanded(
                       child: GlassSecondaryButton(
                         icon: AppIcons.externalLink,
-                        label: '实时预览',
+                        label: s.livePreview,
                         onPressed: () => widget.controller.openHtmlPreview(
                           entry,
                           _configValues,
@@ -394,7 +400,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                     Expanded(
                       child: GlassPrimaryButton(
                         icon: AppIcons.check,
-                        label: '应用此壁纸',
+                        label: s.applyWallpaper,
                         onPressed: _apply,
                       ),
                     ),
@@ -403,7 +409,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
               else
                 GlassPrimaryButton(
                   icon: AppIcons.check,
-                  label: '应用此壁纸',
+                  label: s.applyWallpaper,
                   onPressed: _apply,
                 ),
             ],
@@ -436,10 +442,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
   Future<void> _openTimedFullscreen() async {
     final slot = await ZunoNative.resolveTimedSlot(widget.entry.packageDir);
     if (!mounted) return;
+    final s = ZunoLocalizations.of(context);
     if (slot == null) {
       lgw.GlassToast.show(
         context,
-        message: '未能解析当前时段的子壁纸',
+        message: s.slotResolveFailed,
         type: lgw.GlassToastType.error,
       );
       return;
@@ -451,13 +458,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       case 'video':
         await FullscreenPreviewPage.show(
           context,
-          title: '当前时段: $name',
+          title: s.currentPeriod(name),
           child: VideoPreview(videoPath: '$dir/$entryPath', expand: true),
         );
       case 'depth':
         await FullscreenPreviewPage.show(
           context,
-          title: '当前时段: $name',
+          title: s.currentPeriod(name),
           child: DepthPreview(colorPath: '$dir/$entryPath', expand: true),
         );
       case 'html':
@@ -470,7 +477,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
       default:
         lgw.GlassToast.show(
           context,
-          message: '当前时段（$name）不支持全屏预览',
+          message: s.unsupportedFullscreen(name),
           type: lgw.GlassToastType.warning,
         );
     }
@@ -478,6 +485,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
 
   Widget _preview() {
     final entry = widget.entry;
+    final s = ZunoLocalizations.of(context);
     switch (entry.type) {
       case 'video':
         return _withFullscreenButton(
@@ -491,7 +499,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
           ),
           () => FullscreenPreviewPage.show(
             context,
-            title: '视频全屏预览',
+            title: s.videoFullscreen,
             child: VideoPreview(
               videoPath: '${entry.packageDir}/${entry.entry}',
               volume: (_configValues['volume'] as num?)?.toDouble() ?? 0.0,
@@ -513,7 +521,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
           ),
           () => FullscreenPreviewPage.show(
             context,
-            title: '深度视差全屏预览',
+            title: s.depthFullscreen,
             child: DepthPreview(
               colorPath: '${entry.packageDir}/${entry.entry}',
               strength:
@@ -543,22 +551,22 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                       height: 220,
                       alignment: Alignment.center,
                       color: Colors.black,
-                      child: const Text('无缩略图'),
+                      child: Text(s.noThumbnail),
                     ),
                   ),
                 ),
                 () => FullscreenPreviewPage.show(
                   context,
-                  title: 'HTML 壁纸预览（可捏合缩放）',
+                  title: s.htmlPreviewFullscreen,
                   child: InteractiveViewer(
                     maxScale: 4,
                     child: Center(
                       child: Image.file(
                         File(entry.thumbnailPath!),
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const ColoredBox(
+                        errorBuilder: (_, _, _) => ColoredBox(
                           color: Colors.black,
-                          child: Center(child: Text('缩略图加载失败')),
+                          child: Center(child: Text(s.thumbnailLoadFailed)),
                         ),
                       ),
                     ),
@@ -570,7 +578,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                 height: 220,
                 alignment: Alignment.center,
                 color: Colors.black,
-                child: const Text('无缩略图'),
+                child: Text(s.noThumbnail),
               ),
             // “打开实时预览”已移到固定的 bottomBar：它留在滚动列表里时，
             // premium 玻璃会被滚动手势经 LiquidStretch 拉成椭圆（形变），
@@ -592,7 +600,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
                 appIcon(AppIcons.clock, color: Colors.white70),
                 const SizedBox(height: 8),
                 Text(
-                  'timed 类型本身不渲染。\n全屏预览将展示当前时段激活的子壁纸。',
+                  s.timedNoRender,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: Colors.white70),
@@ -609,11 +617,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
 
   Widget _capabilities() {
     final caps = widget.entry.capabilities;
+    final s = ZunoLocalizations.of(context);
     final chips = <String>[
-      if (caps['pointer'] == true) '接收触摸',
+      if (caps['pointer'] == true) s.capTouch,
       if ((caps['sensors'] as List?)?.isNotEmpty == true)
-        '传感器: ${(caps['sensors'] as List).join(', ')}',
-      if ((caps['network'] as List?)?.isNotEmpty == true) '声明网络（v1 实现仍禁网）',
+        s.capSensors((caps['sensors'] as List).join(', ')),
+      if ((caps['network'] as List?)?.isNotEmpty == true) s.capNetwork,
     ];
     if (chips.isEmpty) return const SizedBox.shrink();
     return Wrap(
@@ -635,6 +644,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
 
   Widget _schedule() {
     final entry = widget.entry;
+    final s = ZunoLocalizations.of(context);
     final current =
         _previewSlotId ??
         WallpaperApplier.currentTimedSlotName(entry) ??
@@ -645,12 +655,15 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
         children: [
           Row(
             children: [
-              Text('调度窗口', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                s.scheduleWindows,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const Spacer(),
               // Flexible + ellipsis：slot 名异常长时不把标题挤出屏幕。
               Flexible(
                 child: Text(
-                  current.isNotEmpty ? '当前: $current' : '',
+                  current.isNotEmpty ? s.currentSlot(current) : '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -667,7 +680,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
               child: Text('• ${r['from']} – ${r['to']} → ${r['wallpaper']}'),
             ),
           if (entry.scheduleDefaultSlot.isNotEmpty)
-            Text('默认: ${entry.scheduleDefaultSlot}'),
+            Text(s.defaultSlot(entry.scheduleDefaultSlot)),
         ],
       ),
     );
@@ -683,6 +696,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
     final mm = (minutes % 60).toString().padLeft(2, '0');
     final canPreview = widget.controller.isEntryActive(widget.entry);
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     // 白底卡片 + 玻璃滑杆：滑杆是液态玻璃控件，外层不能再用玻璃容器。
     return lgw.GlassContainer.card(
       surfaceStyle: lgw.GlassSurfaceStyle.solid,
@@ -693,7 +707,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
         children: [
           Row(
             children: [
-              Text('时段预览', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                s.timedPreview,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const Spacer(),
               // Flexible + ellipsis：防长 slot 名把标题挤出屏幕。
               Flexible(
@@ -734,10 +751,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
           const SizedBox(height: 8),
           Text(
             canPreview
-                ? '拖动预览各时段的壁纸效果；'
-                      '实际时段由 WorkManager 在下次调度检查时恢复。'
-                : '应用此壁纸后才能预览时段切换'
-                      '（预览会热切换激活的子壁纸）。',
+                ? s.timedPreviewActiveHint
+                : s.timedPreviewInactiveHint,
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: scheme.onSurfaceVariant),
           ),
@@ -770,9 +785,4 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> {
     });
   }
 
-  String _hintLabel(String hint) => switch (hint) {
-    'low' => '低',
-    'high' => '高',
-    _ => '中',
-  };
 }

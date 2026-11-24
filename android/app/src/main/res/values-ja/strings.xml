@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zuno_wallpaper_label">ZUNO 壁紙</string>
+    <string name="zuno_wallpaper_desc">ZUNO アプリで管理する動画 / 深度 / HTML ライブ壁紙</string>
+    <string name="zuno_video_missing">動画ファイルが見つかりません</string>
+    <string name="zuno_exit_preview">プレビューを終了</string>
+</resources>

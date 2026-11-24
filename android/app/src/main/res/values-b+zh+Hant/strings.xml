@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zuno_wallpaper_label">ZUNO 桌布</string>
+    <string name="zuno_wallpaper_desc">由 ZUNO 應用程式管理的影片 / 深度 / HTML 動態桌布</string>
+    <string name="zuno_video_missing">影片檔案不存在</string>
+    <string name="zuno_exit_preview">結束預覽</string>
+</resources>

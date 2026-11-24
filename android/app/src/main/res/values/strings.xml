@@ -2,4 +2,6 @@
 <resources>
     <string name="zuno_wallpaper_label">ZUNO Wallpaper</string>
     <string name="zuno_wallpaper_desc">ZUNO — video / depth / HTML wallpapers managed by the ZUNO app</string>
+    <string name="zuno_video_missing">Video file is missing</string>
+    <string name="zuno_exit_preview">Exit preview</string>
 </resources>

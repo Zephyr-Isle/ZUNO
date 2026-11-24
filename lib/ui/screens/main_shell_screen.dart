@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/locale_controller.dart';
 import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/home_screen.dart';
@@ -29,6 +31,7 @@ class MainShellScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.themeController,
+    required this.localeController,
     required this.catalog,
     required this.endpoint,
     required this.shellPrefs,
@@ -36,6 +39,7 @@ class MainShellScreen extends StatefulWidget {
 
   final LibraryController controller;
   final ThemeController themeController;
+  final LocaleController localeController;
   final CatalogController catalog;
   final EndpointController endpoint;
   final ShellPrefsController shellPrefs;
@@ -47,8 +51,6 @@ class MainShellScreen extends StatefulWidget {
 class _MainShellScreenState extends State<MainShellScreen>
     with WidgetsBindingObserver {
   int _selectedIndex = 0;
-
-  static const _titles = ['我的壁纸', '壁纸库'];
 
   bool _decodeDialogOpen = false;
   bool _decodePromptDismissed = false;
@@ -84,17 +86,18 @@ class _MainShellScreenState extends State<MainShellScreen>
       return;
     }
     if (!mounted) return;
+    final s = ZunoLocalizations.of(context);
     final confirmed = await lgw.GlassDialog.show<bool>(
       context: context,
-      title: '将 ZUNO 设为动态壁纸？',
-      message: '将打开系统壁纸预览页，点击“设置壁纸”确认后即可让桌面动起来。',
+      title: s.setWallpaperTitle,
+      message: s.setWallpaperMessage,
       actions: [
         lgw.GlassDialogAction(
-          label: '稍后',
+          label: s.later,
           onPressed: () => Navigator.pop(context, false),
         ),
         lgw.GlassDialogAction(
-          label: '去设置',
+          label: s.goSet,
           isPrimary: true,
           onPressed: () => Navigator.pop(context, true),
         ),
@@ -125,6 +128,7 @@ class _MainShellScreenState extends State<MainShellScreen>
       MaterialPageRoute<void>(
         builder: (_) => SettingsScreen(
           themeController: widget.themeController,
+          localeController: widget.localeController,
           endpoint: widget.endpoint,
           catalog: widget.catalog,
           shellPrefs: widget.shellPrefs,
@@ -146,34 +150,35 @@ class _MainShellScreenState extends State<MainShellScreen>
     }
     final mode = failure['mode'] as String? ?? 'auto';
     final alreadySoftware = mode == 'software';
+    final s = ZunoLocalizations.of(context);
     _decodeDialogOpen = true;
     final choice = await lgw.GlassDialog.show<String>(
       context: context,
-      title: alreadySoftware ? '软件解码也无法播放' : '视频硬件解码失败',
+      title: alreadySoftware
+          ? s.decodeSoftwareFailedTitle
+          : s.decodeHardwareFailedTitle,
       message: alreadySoftware
-          ? '当前视频无法用软件解码器播放，壁纸会停留在静态首帧。'
-                '建议换用 H.264 / H.265 编码、1080p 以内的视频。'
-          : '当前视频无法用硬件解码播放。可以切换到软件解码，'
-                '但会明显增加耗电和发热，高分辨率视频可能卡顿。',
+          ? s.decodeSoftwareFailedMessage
+          : s.decodeHardwareFailedMessage,
       actions: alreadySoftware
           ? [
               lgw.GlassDialogAction(
-                label: '知道了',
+                label: s.gotIt,
                 isPrimary: true,
                 onPressed: () => Navigator.pop(context, 'ok'),
               ),
             ]
           : [
               lgw.GlassDialogAction(
-                label: '稍后',
+                label: s.later,
                 onPressed: () => Navigator.pop(context, 'later'),
               ),
               lgw.GlassDialogAction(
-                label: '不再提示',
+                label: s.neverAsk,
                 onPressed: () => Navigator.pop(context, 'never'),
               ),
               lgw.GlassDialogAction(
-                label: '使用软解',
+                label: s.useSoftware,
                 isPrimary: true,
                 onPressed: () => Navigator.pop(context, 'software'),
               ),
@@ -188,7 +193,7 @@ class _MainShellScreenState extends State<MainShellScreen>
         if (!mounted) return;
         lgw.GlassToast.show(
           context,
-          message: '已切换为软件解码；壁纸回到桌面后会重新加载',
+          message: s.switchedToSoftware,
           type: lgw.GlassToastType.success,
         );
       case 'never':
@@ -204,6 +209,7 @@ class _MainShellScreenState extends State<MainShellScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     // shellPrefs（TAB 显隐）与 endpoint（壁纸库地址）都可能在设置页里被改，
     // 回到壳层时这两处状态要立即反映：合并监听，任一 notify 都整壳重建。
     return ListenableBuilder(
@@ -218,14 +224,18 @@ class _MainShellScreenState extends State<MainShellScreen>
           // 文字被拦腰截断）。页面自己的滚动视图负责补出 app bar / TAB 的高度。
           extendBody: true,
           appBar: lgw.GlassAppBar(
-            title: Text(_titles[_selectedIndex]),
+            title: Text(
+              _selectedIndex == 0 ? s.myWallpapers : s.wallpaperLibrary,
+            ),
             centerTitle: true,
             actions: [
               // 底部 TAB 隐藏时，顶栏按钮接管页签切换：本页图标指向另一页。
               if (!tabBarVisible) ...[
                 GlassCircleButton(
                   icon: _selectedIndex == 0 ? AppIcons.grid : AppIcons.photo,
-                  semanticLabel: _selectedIndex == 0 ? '打开壁纸库' : '返回我的壁纸',
+                  semanticLabel: _selectedIndex == 0
+                      ? s.openLibrary
+                      : s.backToMyWallpapers,
                   onPressed: () => setState(
                     () => _selectedIndex = _selectedIndex == 0 ? 1 : 0,
                   ),
@@ -236,14 +246,14 @@ class _MainShellScreenState extends State<MainShellScreen>
               if (_selectedIndex == 1) ...[
                 GlassCircleButton(
                   icon: AppIcons.refresh,
-                  semanticLabel: '刷新壁纸库',
+                  semanticLabel: s.refreshLibrary,
                   onPressed: widget.catalog.refresh,
                 ),
                 const SizedBox(width: 8),
               ],
               GlassCircleButton(
                 icon: AppIcons.settings,
-                semanticLabel: '设置',
+                semanticLabel: s.settingsSemantic,
                 onPressed: () => _openSettings(context),
               ),
             ],
@@ -283,8 +293,14 @@ class _MainShellScreenState extends State<MainShellScreen>
                     // 选中前后共用同一字形：HugeIcons 只有 stroke 描边风格，
                     // 若用两个字形模拟选中态，切换页签时图标会“变形”。
                     // 选中态只靠颜色（primary vs onSurfaceVariant）+ 标签字重区分。
-                    lgw.GlassTab(icon: appIcon(AppIcons.photo), label: '我的壁纸'),
-                    lgw.GlassTab(icon: appIcon(AppIcons.grid), label: '壁纸库'),
+                    lgw.GlassTab(
+                      icon: appIcon(AppIcons.photo),
+                      label: s.myWallpapers,
+                    ),
+                    lgw.GlassTab(
+                      icon: appIcon(AppIcons.grid),
+                      label: s.wallpaperLibrary,
+                    ),
                   ],
                   selectedIndex: _selectedIndex,
                   onTabSelected: (index) =>
@@ -350,6 +366,7 @@ class _LibraryNotConfigured extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = ZunoLocalizations.of(context);
     final clearBottom =
         shellBottomClearance(context, tabBarVisible: tabBarVisible) + 24;
     return Center(
@@ -360,12 +377,10 @@ class _LibraryNotConfigured extends StatelessWidget {
           children: [
             appIcon(AppIcons.cloud, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text('壁纸库未配置', style: theme.textTheme.titleLarge),
+            Text(s.libraryNotConfiguredTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: 10),
             Text(
-              '壁纸库指向你自己部署的 zuno-api 后端'
-              '（Docker 或 Cloudflare Workers，见 README 的部署章节）。'
-              '到「设置 → 壁纸库地址」填入服务地址即可开始使用。',
+              s.libraryNotConfiguredBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -377,7 +392,7 @@ class _LibraryNotConfigured extends StatelessWidget {
               width: 220,
               child: GlassPrimaryButton(
                 icon: AppIcons.settings,
-                label: '去设置',
+                label: s.goSettings,
                 onPressed: onOpenSettings,
               ),
             ),

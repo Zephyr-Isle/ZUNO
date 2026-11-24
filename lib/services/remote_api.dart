@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 
 /// 服务端返回的可展示错误。
@@ -66,7 +67,11 @@ class RemoteApi {
     );
     final session = AuthSession.tryFromJson(json);
     if (session == null) {
-      throw ApiException(200, 'bad_response', '服务器返回的会话数据不完整');
+      throw ApiException(
+        200,
+        'bad_response',
+        ZunoStrings.current.errSessionIncomplete,
+      );
     }
     return session;
   }
@@ -82,7 +87,11 @@ class RemoteApi {
     );
     final session = AuthSession.tryFromJson(json);
     if (session == null) {
-      throw ApiException(200, 'bad_response', '服务器返回的会话数据不完整');
+      throw ApiException(
+        200,
+        'bad_response',
+        ZunoStrings.current.errSessionIncomplete,
+      );
     }
     return session;
   }
@@ -133,7 +142,11 @@ class RemoteApi {
     );
     final ticket = DownloadTicket.tryFromJson(json);
     if (ticket == null) {
-      throw ApiException(200, 'bad_response', '服务器返回的下载票据不完整');
+      throw ApiException(
+        200,
+        'bad_response',
+        ZunoStrings.current.errTicketIncomplete,
+      );
     }
     return ticket;
   }
@@ -154,7 +167,11 @@ class RemoteApi {
     try {
       request = await _http.getUrl(uri);
     } catch (error) {
-      throw ApiException(0, 'network', '无法连接服务器：$error');
+      throw ApiException(
+        0,
+        'network',
+        ZunoStrings.current.errCannotConnect(error),
+      );
     }
     final response = await request.close();
     if (response.statusCode != 200 && response.statusCode != 206) {
@@ -162,8 +179,12 @@ class RemoteApi {
       throw ApiException(
         response.statusCode,
         'download_failed',
-        '下载失败（HTTP ${response.statusCode}）'
-            '${body.isEmpty ? '' : '：$body'}',
+        ZunoStrings.current.errDownloadHttp(
+          response.statusCode,
+          body.isEmpty
+              ? ''
+              : '${ZunoStrings.current.errorDetailSeparator}$body',
+        ),
       );
     }
     final total = response.contentLength > 0 ? response.contentLength : null;
@@ -198,7 +219,11 @@ class RemoteApi {
     try {
       request = await _http.openUrl(method, uri);
     } catch (error) {
-      throw ApiException(0, 'network', '无法连接服务器：$error');
+      throw ApiException(
+        0,
+        'network',
+        ZunoStrings.current.errCannotConnect(error),
+      );
     }
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     if (token != null) {
@@ -221,7 +246,11 @@ class RemoteApi {
       // 超时，服务端 accept 后挂死不回包时目录页才不会永远转圈。
       response = await request.close().timeout(const Duration(seconds: 30));
     } catch (error) {
-      throw ApiException(0, 'network', '请求失败：$error');
+      throw ApiException(
+        0,
+        'network',
+        ZunoStrings.current.errRequestFailed(error),
+      );
     }
     // 响应体读取也有整体上限：JSON 端点都是小响应，卡住的连接直接放弃。
     String text;
@@ -231,7 +260,11 @@ class RemoteApi {
           .join()
           .timeout(const Duration(seconds: 30));
     } catch (error) {
-      throw ApiException(0, 'network', '响应读取失败：$error');
+      throw ApiException(
+        0,
+        'network',
+        ZunoStrings.current.errResponseReadFailed(error),
+      );
     }
     Map<String, dynamic>? json;
     if (text.isNotEmpty) {
@@ -247,7 +280,8 @@ class RemoteApi {
       throw ApiException(
         status,
         json?['error'] as String? ?? 'http_$status',
-        json?['message'] as String? ?? '请求失败（HTTP $status）',
+        json?['message'] as String? ??
+            ZunoStrings.current.errRequestFailed('HTTP $status'),
       );
     }
     return json ?? <String, dynamic>{};

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zuno_wallpaper_label">ZUNO 壁纸</string>
+    <string name="zuno_wallpaper_desc">由 ZUNO 应用管理的视频 / 深度 / HTML 动态壁纸</string>
+    <string name="zuno_video_missing">视频文件不存在</string>
+    <string name="zuno_exit_preview">退出预览</string>
+</resources>

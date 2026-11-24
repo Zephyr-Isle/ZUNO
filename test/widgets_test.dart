@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/ui/widgets/config_editor.dart';
 import 'package:zuno/ui/widgets/package_card.dart';
@@ -9,6 +10,11 @@ import 'package:zuno/ui/widgets/type_badge.dart';
 
 /// 纯 UI 单元测试（不触达 Platform Channel / 文件系统）。
 void main() {
+  // 断言使用中文文案；固定语言，避免受宿主机语言环境影响。
+  setUp(() {
+    ZunoStrings.current = ZunoStrings.forLanguage('zh');
+  });
+
   // 一个不含 thumbnail 的测试条目（PackageCard 走占位图标路径，不读磁盘）。
   LibraryEntry entry({bool active = false}) => LibraryEntry(
     id: 'com.test.sample',

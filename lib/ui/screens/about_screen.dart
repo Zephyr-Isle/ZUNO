@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
 
@@ -26,7 +27,7 @@ class AboutScreen extends StatelessWidget {
       if (context.mounted) {
         lgw.GlassToast.show(
           context,
-          message: '群链接已复制，可在 QQ 中粘贴加入',
+          message: ZunoLocalizations.of(context).groupLinkCopied,
           type: lgw.GlassToastType.info,
         );
       }
@@ -36,6 +37,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     // extendBody 后内容滚进玻璃导航栏下方由 soft 边缘淡出收尾。
     final mediaQuery = MediaQuery.of(context);
     return lgw.GlassScaffold(
@@ -43,10 +45,10 @@ class AboutScreen extends StatelessWidget {
       statusBarStyle: zunoStatusBarStyle(context),
       extendBody: true,
       appBar: lgw.GlassAppBar(
-        title: const Text('关于'),
+        title: Text(s.aboutTitle),
         leading: GlassCircleButton(
           icon: AppIcons.back,
-          semanticLabel: '返回',
+          semanticLabel: s.back,
           onPressed: () => Navigator.maybePop(context),
         ),
       ),
@@ -94,8 +96,7 @@ class AboutScreen extends StatelessWidget {
             // 简介：一句话讲清楚应用做什么。
             GlassSurface(
               child: Text(
-                '让桌面动起来。ZUNO 提供视频、深度视差、HTML 交互和定时切换'
-                '四种动态壁纸：导入壁纸包、一键应用，即可拥有会动的桌面。',
+                s.aboutDescription,
                 style: Theme.of(context).textTheme.bodyMedium
                     ?.copyWith(height: 1.6),
               ),
@@ -106,8 +107,8 @@ class AboutScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: ListTile(
                 leading: appIcon(AppIcons.group, color: scheme.primary),
-                title: const Text('QQ 交流群'),
-                subtitle: const Text('反馈问题、分享与获取壁纸包'),
+                title: Text(s.qqGroup),
+                subtitle: Text(s.qqGroupSubtitle),
                 trailing: appIcon(
                   AppIcons.chevronRight,
                   color: scheme.onSurfaceVariant,
@@ -121,20 +122,43 @@ class AboutScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('功能亮点', style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    s.highlights,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 8),
-                  _bullet(context, '视频壁纸', '流畅播放，默认静音，可调速度与音量'),
-                  _bullet(context, '深度视差', '随手机倾斜产生立体层次感'),
-                  _bullet(context, 'HTML 交互壁纸', '支持点击互动的网页壁纸'),
-                  _bullet(context, '定时切换', '白天夜晚自动换不同的壁纸'),
-                  _bullet(context, '性能档位', '高 / 中 / 低，兼顾观感与省电'),
+                  _bullet(
+                    context,
+                    s.featureVideoTitle,
+                    s.featureVideoDesc,
+                  ),
+                  _bullet(
+                    context,
+                    s.featureDepthTitle,
+                    s.featureDepthDesc,
+                  ),
+                  _bullet(
+                    context,
+                    s.featureHtmlTitle,
+                    s.featureHtmlDesc,
+                  ),
+                  _bullet(
+                    context,
+                    s.featureTimedTitle,
+                    s.featureTimedDesc,
+                  ),
+                  _bullet(
+                    context,
+                    s.featurePerformanceTitle,
+                    s.featurePerformanceDesc,
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
             Center(
               child: Text(
-                'Made with ZUNO',
+                s.madeWith,
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
             ),

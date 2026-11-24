@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/services/remote_api.dart';
@@ -114,7 +115,7 @@ class AuthController extends ChangeNotifier {
       _error = error.message;
       return false;
     } catch (error) {
-      _error = '操作失败：$error';
+      _error = ZunoStrings.current.errOperationFailed(error);
       return false;
     } finally {
       _busy = false;

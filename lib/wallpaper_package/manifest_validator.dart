@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/wallpaper_manifest.dart';
 import 'package:zuno/models/wallpaper_type.dart';
 import 'package:zuno/wallpaper_package/checksum.dart';
@@ -33,7 +34,10 @@ class ManifestValidator {
       return null;
     } catch (t) {
       issues.add(
-        ValidationIssue(IssueCode.fieldInvalid, 'manifest 解析异常（包结构畸形）: $t'),
+        ValidationIssue(
+          IssueCode.fieldInvalid,
+          ZunoStrings.current.errManifestParse(t),
+        ),
       );
       return null;
     }
@@ -52,7 +56,10 @@ class ManifestValidator {
       issues.add(
         ValidationIssue(
           IssueCode.entryMissing,
-          'entry "${manifest.entry}" 不在包内（包内文件 ${files.length} 个）',
+          ZunoStrings.current.errEntryNotInPackage(
+            manifest.entry,
+            files.length,
+          ),
         ),
       );
     }
@@ -62,9 +69,9 @@ class ManifestValidator {
         .toList();
     if (contentFiles.isEmpty) {
       issues.add(
-        const ValidationIssue(
+        ValidationIssue(
           IssueCode.contentEmpty,
-          'content/ 目录为空（或 ZIP 中未包含 content/ 条目）',
+          ZunoStrings.current.errContentEmpty,
         ),
       );
     }
@@ -73,7 +80,7 @@ class ManifestValidator {
       issues.add(
         ValidationIssue(
           IssueCode.minSdkTooHigh,
-          '包要求 minSdk=${manifest.minSdk}，本机 API=$deviceApiLevel',
+          ZunoStrings.current.errMinSdk(manifest.minSdk, deviceApiLevel),
         ),
       );
     }
@@ -82,9 +89,9 @@ class ManifestValidator {
         // 深度壁纸的渲染器固定读取 content/depth.png（见 DepthWallpaperEngine）。
         if (!files.contains('content/depth.png')) {
           issues.add(
-            const ValidationIssue(
+            ValidationIssue(
               IssueCode.fieldInvalid,
-              'depth 类型要求包内存在 content/depth.png（与 color 同尺寸的灰度深度图）',
+              ZunoStrings.current.errDepthRequires,
             ),
           );
         }
@@ -94,7 +101,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.fieldInvalid,
-              'depth 类型的 entry 应为 jpg/png，实际: ${manifest.entry}',
+              ZunoStrings.current.errDepthEntryFormat(manifest.entry),
             ),
           );
         }
@@ -104,7 +111,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.fieldInvalid,
-              'html 类型的 entry 应为 .html 文件，实际: ${manifest.entry}',
+              ZunoStrings.current.errHtmlEntryFormat(manifest.entry),
             ),
           );
         }
@@ -114,7 +121,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.fieldInvalid,
-              'video 类型的 entry 应为 mp4/webm，实际: ${manifest.entry}',
+              ZunoStrings.current.errVideoEntryFormat(manifest.entry),
             ),
           );
         }
@@ -136,13 +143,16 @@ class ManifestValidator {
         issues.add(
           ValidationIssue(
             IssueCode.checksumMismatch,
-            '校验和不匹配：期望 $expected，实际计算 $actual',
+            ZunoStrings.current.errChecksumMismatch(expected, actual),
           ),
         );
       }
     } on FileSystemException catch (e) {
       issues.add(
-        ValidationIssue(IssueCode.checksumMismatch, '重算校验和失败: ${e.message}'),
+        ValidationIssue(
+          IssueCode.checksumMismatch,
+          ZunoStrings.current.errChecksumRecompute(e.message),
+        ),
       );
     }
   }
@@ -181,7 +191,7 @@ class ManifestValidator {
         issues.add(
           ValidationIssue(
             IssueCode.timedSlotMissing,
-            'schedule 引用的 slot "$slotName" 不存在（缺少 $slotManifestPath）',
+            ZunoStrings.current.errSlotMissing(slotName, slotManifestPath),
           ),
         );
         continue;
@@ -197,7 +207,7 @@ class ManifestValidator {
         issues.add(
           ValidationIssue(
             IssueCode.timedSlotInvalid,
-            'slot "$slotName" 的 content/ 为空',
+            ZunoStrings.current.errSlotContentEmpty(slotName),
           ),
         );
         continue;
@@ -218,7 +228,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 的 manifest.schemaVersion 必须为 1',
+              ZunoStrings.current.errSlotSchema(slotName),
             ),
           );
           continue;
@@ -227,7 +237,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 的 manifest.id 缺失',
+              ZunoStrings.current.errSlotIdMissing(slotName),
             ),
           );
           continue;
@@ -236,7 +246,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 的 id 与顶层包 id 冲突',
+              ZunoStrings.current.errSlotIdConflict(slotName),
             ),
           );
           continue;
@@ -245,7 +255,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 不允许嵌套 timed 类型',
+              ZunoStrings.current.errSlotNestedTimed(slotName),
             ),
           );
           continue;
@@ -255,7 +265,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 的 type 必须是 video/html/depth，实际: $subType',
+              ZunoStrings.current.errSlotTypeInvalid(slotName, subType),
             ),
           );
           continue;
@@ -264,7 +274,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotInvalid,
-              'slot "$slotName" 的 manifest.entry 缺失',
+              ZunoStrings.current.errSlotEntryMissing(slotName),
             ),
           );
           continue;
@@ -274,7 +284,7 @@ class ManifestValidator {
           issues.add(
             ValidationIssue(
               IssueCode.timedSlotMissing,
-              'slot "$slotName" 的 entry "$subEntry" 不存在',
+              ZunoStrings.current.errSlotEntryNotFound(slotName, subEntry),
             ),
           );
           continue;
@@ -284,7 +294,7 @@ class ManifestValidator {
         issues.add(
           ValidationIssue(
             IssueCode.timedSlotInvalid,
-            'slot "$slotName" 的 manifest.json 无法解析: $e',
+            ZunoStrings.current.errSlotManifestUnreadable(slotName, e),
           ),
         );
       }

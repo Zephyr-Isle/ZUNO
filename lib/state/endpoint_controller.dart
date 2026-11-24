@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/services/platform_bridge.dart';
 import 'package:zuno/services/remote_api.dart';
 
@@ -47,7 +48,7 @@ class EndpointController extends ChangeNotifier {
   /// 保存新地址。返回 null 表示成功，否则是给用户看的错误文案。
   Future<String?> setUrl(String raw) async {
     final next = normalize(raw);
-    if (next == null) return '请填写完整地址，例如 https://api.example.com';
+    if (next == null) return ZunoStrings.current.errEndpointInvalid;
     if (next == _url) return null;
     // 先写原生（`library.base_url` 是重启后的事实来源），成功后再改内存并
     // 广播：顺序反过来时，通道写入失败会让内存指向新地址、重启后却跳回

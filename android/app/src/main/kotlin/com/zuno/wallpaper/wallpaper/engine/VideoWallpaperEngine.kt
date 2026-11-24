@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import com.zuno.wallpaper.R
 import com.zuno.wallpaper.wallpaper.ActiveWallpaper
 import com.zuno.wallpaper.wallpaper.ActiveWallpaperStore
 import com.zuno.wallpaper.wallpaper.PerformanceTier
@@ -244,7 +245,7 @@ class VideoWallpaperEngine(
             ActiveWallpaperStore.recordVideoDecodeFailure(
                 context,
                 wallpaper.id,
-                "视频文件不存在",
+                context.getString(R.string.zuno_video_missing),
             )
             // 文件缺失无法起播放器，但包缩略图仍可画到 Surface 上——
             // 否则用户看到的是纯黑屏且没有任何恢复信号。

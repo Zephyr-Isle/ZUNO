@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zuno_wallpaper_label">ZUNO Wallpaper</string>
+    <string name="zuno_wallpaper_desc">Von der ZUNO-App verwaltete Video-, Tiefen- und HTML-Live-Wallpaper</string>
+    <string name="zuno_video_missing">Videodatei fehlt</string>
+    <string name="zuno_exit_preview">Vorschau beenden</string>
+</resources>

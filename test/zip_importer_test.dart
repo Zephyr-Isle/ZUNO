@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/wallpaper_package/manifest_validator.dart';
 import 'package:zuno/wallpaper_package/path_guard.dart';
 import 'package:zuno/wallpaper_package/timed_schedule.dart';
@@ -18,6 +19,7 @@ void main() {
   late Directory tempRoot;
 
   setUp(() async {
+    ZunoStrings.current = ZunoStrings.forLanguage('zh');
     tempRoot = await Directory.systemTemp.createTemp('zuno_test_');
   });
 

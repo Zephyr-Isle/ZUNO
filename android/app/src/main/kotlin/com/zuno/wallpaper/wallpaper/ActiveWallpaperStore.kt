@@ -49,6 +49,9 @@ object ActiveWallpaperStore {
     private const val KEY_TIMED_LAST_SWITCH = "timed.last_switch"
     private const val KEY_THEME_MODE = "app.theme_mode"
 
+    /** 显示语言：system 或 en / zh / zh_Hant / ja / ko / es / fr / de。 */
+    private const val KEY_APP_LANGUAGE = "app.language"
+
     /** 壁纸库后端地址；ZUNO 不内置云端服务，地址由用户在设置页填写。 */
     private const val KEY_LIBRARY_URL = "library.base_url"
 
@@ -123,6 +126,14 @@ object ActiveWallpaperStore {
 
     fun themeMode(context: Context): String =
         prefs(context).getString(KEY_THEME_MODE, null) ?: "system"
+
+    /** 显示语言；默认跟随系统。 */
+    fun appLanguage(context: Context): String =
+        prefs(context).getString(KEY_APP_LANGUAGE, null) ?: "system"
+
+    fun setAppLanguage(context: Context, code: String) {
+        prefs(context).edit().putString(KEY_APP_LANGUAGE, code).apply()
+    }
 
     /** 壁纸库地址；返回 null 表示用户没设置过（用编译期默认值）。 */
     fun libraryUrl(context: Context): String? =

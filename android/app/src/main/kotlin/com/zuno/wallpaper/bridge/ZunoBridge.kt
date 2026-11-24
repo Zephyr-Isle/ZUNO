@@ -411,6 +411,18 @@ object ZunoBridge {
                 result.success(true)
             }
 
+            // ---------------------------------------------------------- 显示语言
+            "getAppLanguage" ->
+                result.success(ActiveWallpaperStore.appLanguage(activity))
+
+            "setAppLanguage" -> {
+                ActiveWallpaperStore.setAppLanguage(
+                    activity,
+                    args.str("code") ?: "system",
+                )
+                result.success(true)
+            }
+
             // ---------------------------------------------------------- 账号会话
             //
             // token 只做“本地记住登录态”：Dart 侧用完即从内存取出设 HTTP 头，

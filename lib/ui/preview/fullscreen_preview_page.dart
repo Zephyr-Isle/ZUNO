@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 
 /// 全屏预览页：沉浸式黑底容器，任意预览内容填满其中。
@@ -65,7 +66,7 @@ class _FullscreenPreviewPageState extends State<FullscreenPreviewPage> {
             child: SafeArea(
               child: RoundIconButton(
                 icon: AppIcons.close,
-                tooltip: '退出全屏',
+                tooltip: ZunoLocalizations.of(context).exitFullscreen,
                 onTap: () => Navigator.of(context).maybePop(),
               ),
             ),
@@ -154,7 +155,7 @@ class FullscreenEnterButton extends StatelessWidget {
     // 否则在缩略图右上角显得笨重、压住画面。
     return RoundIconButton(
       icon: AppIcons.fullscreen,
-      tooltip: '全屏预览',
+      tooltip: ZunoLocalizations.of(context).fullscreenPreview,
       onTap: onTap,
       size: 34,
       iconSize: 14,

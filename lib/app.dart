@@ -2,9 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/endpoint_controller.dart';
 import 'package:zuno/state/library_controller.dart';
+import 'package:zuno/state/locale_controller.dart';
 import 'package:zuno/state/shell_prefs_controller.dart';
 import 'package:zuno/state/theme_controller.dart';
 import 'package:zuno/ui/screens/main_shell_screen.dart';
@@ -15,6 +17,7 @@ class ZunoApp extends StatelessWidget {
     super.key,
     required this.controller,
     required this.themeController,
+    required this.localeController,
     required this.endpoint,
     required this.catalog,
     required this.shellPrefs,
@@ -22,6 +25,7 @@ class ZunoApp extends StatelessWidget {
 
   final LibraryController controller;
   final ThemeController themeController;
+  final LocaleController localeController;
   final EndpointController endpoint;
   final CatalogController catalog;
   final ShellPrefsController shellPrefs;
@@ -31,16 +35,22 @@ class ZunoApp extends StatelessWidget {
     // ThemeController 是外观的唯一来源：设置页改动后 MaterialApp 立即重建，
     // 玻璃主题经 brightnessResolver: Theme.maybeBrightnessOf 同步切换明暗变体。
     return ListenableBuilder(
-      listenable: themeController,
+      listenable: Listenable.merge([themeController, localeController]),
       builder: (context, _) => MaterialApp(
         title: 'ZUNO',
         debugShowCheckedModeBanner: false,
+        // null = 跟随系统；非 null 时强制指定语言。
+        locale: localeController.locale,
+        supportedLocales: ZunoLocalizations.supportedLocales,
+        localizationsDelegates: ZunoLocalizations.delegates,
+        localeListResolutionCallback: ZunoLocalizations.resolveLocale,
         themeMode: themeController.mode,
         theme: _theme(Brightness.light),
         darkTheme: _theme(Brightness.dark),
         home: MainShellScreen(
           controller: controller,
           themeController: themeController,
+          localeController: localeController,
           endpoint: endpoint,
           catalog: catalog,
           shellPrefs: shellPrefs,

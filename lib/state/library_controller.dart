@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:zuno/core/zuno_paths.dart';
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/library_entry.dart';
 import 'package:zuno/services/library_repository.dart';
 import 'package:zuno/services/platform_bridge.dart';
@@ -120,13 +121,17 @@ class LibraryController extends ChangeNotifier {
             stagingParentPath: stagingParent,
             libraryRootPath: libraryRoot,
             deviceApiLevel: _deviceApiLevel,
+            languageCode: ZunoStrings.current.languageCode,
           ),
         );
       } catch (e) {
         // isolate 内未预料的异常（如设备存储故障）也转为可展示的失败报告，
         // 不能让未处理异步异常逃出 UI 调用链。
         result = ImportFailure([
-          ValidationIssue(IssueCode.unknown, '导入过程异常: $e'),
+          ValidationIssue(
+            IssueCode.unknown,
+            ZunoStrings.current.errImportException(e),
+          ),
         ]);
       }
       lastImportResult = result;
@@ -175,19 +180,13 @@ class LibraryController extends ChangeNotifier {
           };
           final warnings = <String>[];
           if (mime != null && !supported.contains(mime)) {
-            warnings.add(
-              '此视频的编码格式在部分手机上可能不支持：'
-              '壁纸可能显示为静态画面，建议换用 H.264/H.265 编码的视频',
-            );
+            warnings.add(ZunoStrings.current.warnVideoCodec);
           }
           final decodable = await ZunoNative.probeVideoSupported(
             path: videoPath,
           );
           if (decodable == false) {
-            warnings.add(
-              '此视频的分辨率/帧率超出本机解码能力：'
-              '预览与壁纸将显示为静态首帧',
-            );
+            warnings.add(ZunoStrings.current.warnVideoDecodeLimit);
           }
           lastImportWarnings = warnings;
         }
@@ -212,15 +211,13 @@ class LibraryController extends ChangeNotifier {
       final result = await _applier.apply(entry, configValues);
       await refresh();
       if (!result.success) {
-        return result.message ?? '应用失败';
+        return result.message ?? ZunoStrings.current.applyFailedGeneric;
       }
       // 激活状态已写入；但系统选择器可能没有打开（两个 Intent 都失败的 ROM），
       // 此时必须告诉用户手动路径，不能谎称“预览页即将打开”。
-      return result.previewLaunched
-          ? null
-          : '已保存壁纸设置，但未能打开系统预览——请在系统设置的壁纸页中手动选择 ZUNO';
+      return result.previewLaunched ? null : ZunoStrings.current.applyNoPreview;
     } catch (e) {
-      return '应用失败: $e';
+      return ZunoStrings.current.applyFailed(e);
     }
   }
 
@@ -251,7 +248,7 @@ class LibraryController extends ChangeNotifier {
   /// 删除壁纸包。正在被系统壁纸使用（含 timed 父包）的包拒绝删除。
   Future<String?> delete(LibraryEntry entry) async {
     if (isEntryActive(entry)) {
-      return '该壁纸正在使用中，请先应用其他壁纸再删除';
+      return ZunoStrings.current.deleteInUse;
     }
     try {
       final dir = Directory(entry.packageDir);
@@ -262,7 +259,7 @@ class LibraryController extends ChangeNotifier {
       await refresh();
       return null;
     } catch (e) {
-      return '删除失败: $e';
+      return ZunoStrings.current.deleteFailed(e);
     }
   }
 
@@ -312,12 +309,14 @@ class _ImportArgs {
     required this.stagingParentPath,
     required this.libraryRootPath,
     required this.deviceApiLevel,
+    required this.languageCode,
   });
 
   final String zipPath;
   final String stagingParentPath;
   final String libraryRootPath;
   final int deviceApiLevel;
+  final String languageCode;
 }
 
 /// 顶层函数：isolate 入口必须是顶层/静态函数。
@@ -327,6 +326,7 @@ Future<Object> _importInIsolate(_ImportArgs args) {
     stagingParentPath: args.stagingParentPath,
     libraryRootPath: args.libraryRootPath,
     deviceApiLevel: args.deviceApiLevel,
+    languageCode: args.languageCode,
   );
 }
 

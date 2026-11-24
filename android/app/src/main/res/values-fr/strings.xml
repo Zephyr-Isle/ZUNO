@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zuno_wallpaper_label">Fond d\'écran ZUNO</string>
+    <string name="zuno_wallpaper_desc">Fonds d\'écran animés vidéo / profondeur / HTML gérés par l\'app ZUNO</string>
+    <string name="zuno_video_missing">Le fichier vidéo est introuvable</string>
+    <string name="zuno_exit_preview">Quitter l\'aperçu</string>
+</resources>

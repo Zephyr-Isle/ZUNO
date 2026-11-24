@@ -1,11 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 
 /// 云端契约测试：这些字段名是 `backend/src/wallpapers.ts` 与 `auth.ts`
 /// 直接决定的，改名会让客户端静默丢数据（列表少字段 / 登录后没 token）。
 /// 纯解析，不触达网络与 Platform Channel。
 void main() {
+  setUp(() {
+    ZunoStrings.current = ZunoStrings.forLanguage('zh');
+  });
+
   test('RemoteWallpaper：解析完整条目', () {
     final item = RemoteWallpaper.tryFromJson({
       'id': 'com.zuno.demo',

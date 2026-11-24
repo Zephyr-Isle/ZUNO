@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 import 'package:zuno/ui/widgets/app_icons.dart';
 import 'package:zuno/ui/widgets/glass_widgets.dart';
@@ -53,10 +54,11 @@ class _RemotePackageCardState extends State<RemotePackageCard> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     final visual = _visualOf(item.type);
     return Semantics(
       button: true,
-      label: '在线壁纸 ${item.title}',
+      label: '${s.wallpaperLibrary}: ${item.title}',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
@@ -118,7 +120,7 @@ class _RemotePackageCardState extends State<RemotePackageCard> {
                                 ),
                                 const SizedBox(width: 3),
                                 Text(
-                                  '已安装',
+                                  s.installed,
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: scheme.onPrimary,
@@ -222,7 +224,9 @@ class _RemotePackageCardState extends State<RemotePackageCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              percent == null ? '下载中…' : '${(percent * 100).round()}%',
+              percent == null
+                  ? ZunoLocalizations.of(context).downloading
+                  : '${(percent * 100).round()}%',
               style: const TextStyle(
                 fontSize: 11,
                 color: Colors.white,

@@ -1,24 +1,28 @@
+import 'package:zuno/l10n/zuno_strings.dart';
+
 /// 导入校验的失败报告。
 ///
 /// 任何一步失败即整包拒绝导入（规格），失败原因逐条列出，UI 直接展示给用户。
+/// 标签按当前 [ZunoStrings.current] 本地化；后台 isolate 会先按用户语言设置
+/// 当前字符串表，再执行导入校验。
 enum IssueCode {
-  zipInvalid('ZIP 无法解压'),
-  zipSlip('ZIP 路径遍历攻击'),
-  manifestMissing('manifest.json 缺失'),
-  manifestUnreadable('manifest.json 无法解析'),
-  fieldInvalid('字段非法'),
-  entryMissing('入口文件不存在'),
-  contentEmpty('content/ 为空'),
-  checksumMismatch('校验和不匹配'),
-  minSdkTooHigh('包要求的 minSdk 高于本机系统'),
-  timedScheduleInvalid('schedule.json 非法'),
-  timedSlotMissing('schedule 引用的子壁纸不存在'),
-  timedSlotInvalid('子壁纸 manifest 非法'),
-  unknown('未知错误');
+  zipInvalid,
+  zipSlip,
+  manifestMissing,
+  manifestUnreadable,
+  fieldInvalid,
+  entryMissing,
+  contentEmpty,
+  checksumMismatch,
+  minSdkTooHigh,
+  timedScheduleInvalid,
+  timedSlotMissing,
+  timedSlotInvalid,
+  unknown;
 
-  const IssueCode(this.label);
+  const IssueCode();
 
-  final String label;
+  String get label => ZunoStrings.current.issueLabel(name);
 }
 
 class ValidationIssue {

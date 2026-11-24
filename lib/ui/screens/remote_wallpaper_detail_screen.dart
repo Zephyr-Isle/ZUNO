@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 import 'package:zuno/services/remote_api.dart';
 import 'package:zuno/state/catalog_controller.dart';
@@ -56,11 +57,12 @@ class _RemoteWallpaperDetailScreenState
         if (result is ImportFailure) {
           _showIssues(result);
         } else {
+          final s = ZunoLocalizations.of(context);
           lgw.GlassToast.show(
             context,
             message: widget.library.importing
-                ? '已有导入正在进行，请稍候'
-                : '导入失败：下载的文件无法读取',
+                ? s.importBusy
+                : s.downloadFileUnreadable,
             type: lgw.GlassToastType.error,
           );
         }
@@ -68,7 +70,7 @@ class _RemoteWallpaperDetailScreenState
       }
       lgw.GlassToast.show(
         context,
-        message: '已加入「我的壁纸」',
+        message: ZunoLocalizations.of(context).addedToMyWallpapers,
         type: lgw.GlassToastType.success,
       );
       // 与本地导入保持一致：成功后直达详情页，应用壁纸是自然的下一步。
@@ -81,7 +83,9 @@ class _RemoteWallpaperDetailScreenState
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (error) {
-      if (mounted) setState(() => _error = '下载失败：$error');
+      if (mounted) {
+        setState(() => _error = ZunoLocalizations.of(context).downloadFailed(error));
+      }
     } finally {
       // 临时包已经解压进壁纸库，源文件没有保留价值。
       if (file != null) {
@@ -96,6 +100,7 @@ class _RemoteWallpaperDetailScreenState
   }
 
   void _showIssues(ImportFailure failure) {
+    final s = ZunoLocalizations.of(context);
     lgw.GlassModalSheet.show<void>(
       context: context,
       halfSize: 0.55,
@@ -111,7 +116,7 @@ class _RemoteWallpaperDetailScreenState
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '导入被拒绝',
+                  s.importRejected,
                   style: Theme.of(sheetContext).textTheme.titleMedium,
                 ),
               ],
@@ -133,6 +138,7 @@ class _RemoteWallpaperDetailScreenState
   Widget build(BuildContext context) {
     final item = widget.item;
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     // extendBody 后内容滚进玻璃栏下方由 soft 边缘淡出收尾；
     // ListView 自己让出 app bar 与底部下载 CTA 的高度。
     final mediaQuery = MediaQuery.of(context);
@@ -146,7 +152,7 @@ class _RemoteWallpaperDetailScreenState
         centerTitle: false,
         leading: GlassCircleButton(
           icon: AppIcons.back,
-          semanticLabel: '返回',
+          semanticLabel: s.back,
           onPressed: () => Navigator.maybePop(context),
         ),
       ),
@@ -180,7 +186,7 @@ class _RemoteWallpaperDetailScreenState
             ),
             const SizedBox(height: 14),
             lgw.GlassGroupedSection(
-              header: const Text('包信息'),
+              header: Text(s.packageInfo),
               // 纯文字行卡走 solid：premium 玻璃的雾会把行文字糊掉。
               surfaceStyle: lgw.GlassSurfaceStyle.solid,
               shape: glassShape(radius: 28),
@@ -188,15 +194,20 @@ class _RemoteWallpaperDetailScreenState
                 _row(
                   context,
                   AppIcons.user,
-                  '作者',
+                  s.authorField,
                   (item.author == null || item.author!.isEmpty)
-                      ? '未署名'
+                      ? s.unsigned
                       : item.author!,
                 ),
-                _row(context, AppIcons.layers, '版本', 'v${item.version}'),
-                _row(context, AppIcons.database, '大小', item.sizeLabel),
-                _row(context, AppIcons.clock, '更新', item.updatedLabel),
-                _row(context, AppIcons.info, '标识', item.id),
+                _row(
+                  context,
+                  AppIcons.layers,
+                  s.versionField,
+                  'v${item.version}',
+                ),
+                _row(context, AppIcons.database, s.sizeField, item.sizeLabel),
+                _row(context, AppIcons.clock, s.updatedField, item.updatedLabel),
+                _row(context, AppIcons.info, s.idField, item.id),
               ],
             ),
             if (_error != null) ...[
@@ -219,8 +230,7 @@ class _RemoteWallpaperDetailScreenState
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                '下载后会在本机重新校验 manifest 与 checksum，'
-                '通过校验才会进入「我的壁纸」；不通过时会把具体原因列出来。',
+                s.verifyNote,
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
@@ -236,13 +246,14 @@ class _RemoteWallpaperDetailScreenState
         builder: (context, _) {
           final downloading = widget.catalog.isDownloading(item.id);
           final progress = widget.catalog.progressOf(item.id);
+          final strings = ZunoLocalizations.of(context);
           final String label;
           if (_busy || downloading) {
             label = progress == null
-                ? '下载中…'
-                : '下载中 ${(progress * 100).round()}%';
+                ? strings.downloading
+                : strings.downloadingPercent((progress * 100).round());
           } else {
-            label = '下载并导入';
+            label = strings.downloadImport;
           }
           return PreferredSize(
             preferredSize: const Size.fromHeight(76),

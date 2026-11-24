@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:zuno/l10n/zuno_localizations.dart';
 import 'package:zuno/state/catalog_controller.dart';
 import 'package:zuno/state/library_controller.dart';
 import 'package:zuno/ui/screens/remote_wallpaper_detail_screen.dart';
@@ -175,6 +176,7 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final s = ZunoLocalizations.of(context);
     Widget child;
     if (loading) {
       child = const SizedBox.square(
@@ -188,7 +190,7 @@ class _Footer extends StatelessWidget {
       );
     } else if (!hasMore) {
       child = Text(
-        '已经到底了',
+        s.endOfList,
         style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
       );
     } else {
@@ -214,6 +216,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = ZunoLocalizations.of(context);
     // SliverFillRemaining 在整屏（extendBody）里居中：底部让出玻璃 TAB，
     // 文案和按钮才不会撞在 TAB 上。
     final clearBottom = bottomClear + 24;
@@ -225,12 +228,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             appIcon(AppIcons.cloud, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text('壁纸库是空的', style: theme.textTheme.titleLarge),
+            Text(s.libraryEmptyTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: 10),
             Text(
-              '如果这是你自己部署的后端，请到「设置 → 壁纸库地址」'
-              '填写正确的服务地址；地址正确但列表为空，说明管理端还没有'
-              '同步任何 .zuno 包。',
+              s.libraryEmptyBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -242,7 +243,7 @@ class _EmptyState extends StatelessWidget {
               width: 220,
               child: GlassSecondaryButton(
                 icon: AppIcons.settings,
-                label: '设置壁纸库地址',
+                label: s.setLibraryAddress,
                 onPressed: onOpenSettings,
               ),
             ),
@@ -271,6 +272,7 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = ZunoLocalizations.of(context);
     final clearBottom = bottomClear + 24;
     return Center(
       child: Padding(
@@ -280,7 +282,7 @@ class _ErrorState extends StatelessWidget {
           children: [
             appIcon(AppIcons.error, size: 56, color: theme.colorScheme.error),
             const SizedBox(height: 14),
-            Text('目录加载失败', style: theme.textTheme.titleMedium),
+            Text(s.catalogLoadFailed, style: theme.textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
               message,
@@ -297,7 +299,7 @@ class _ErrorState extends StatelessWidget {
                   width: 150,
                   child: GlassSecondaryButton(
                     icon: AppIcons.settings,
-                    label: '改地址',
+                    label: s.changeAddress,
                     onPressed: onOpenSettings,
                   ),
                 ),
@@ -306,7 +308,7 @@ class _ErrorState extends StatelessWidget {
                   width: 150,
                   child: GlassSecondaryButton(
                     icon: AppIcons.refresh,
-                    label: '重试',
+                    label: s.retry,
                     onPressed: onRetry,
                   ),
                 ),

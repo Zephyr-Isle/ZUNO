@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:zuno/l10n/zuno_strings.dart';
 import 'package:zuno/models/remote_wallpaper.dart';
 import 'package:zuno/services/remote_api.dart';
 
@@ -73,7 +74,7 @@ class CatalogController extends ChangeNotifier {
       _error = error.message;
     } catch (error) {
       if (gen != _generation) return;
-      _error = '目录加载失败：$error';
+      _error = ZunoStrings.current.errCatalogLoad(error);
     } finally {
       if (gen == _generation) {
         _loading = false;
@@ -122,7 +123,7 @@ class CatalogController extends ChangeNotifier {
       _error = error.message;
     } catch (error) {
       if (gen != _generation) return;
-      _error = '加载更多失败：$error';
+      _error = ZunoStrings.current.errLoadMore(error);
     } finally {
       if (gen == _generation) {
         _loading = false;
@@ -139,7 +140,11 @@ class CatalogController extends ChangeNotifier {
   /// 否则下一次重试会把它当成功结果导入而报 checksum 错误。
   Future<File> download(RemoteWallpaper item, {String? token}) async {
     if (_progress.containsKey(item.id)) {
-      throw ApiException(0, 'busy', '该壁纸正在下载中');
+      throw ApiException(
+        0,
+        'busy',
+        ZunoStrings.current.errWallpaperDownloading,
+      );
     }
     _progress[item.id] = null;
     notifyListeners();

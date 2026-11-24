@@ -10,6 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # 多语言：Material/Cupertino 内置组件文案 + 语言解析回调。
+  flutter_localizations:
+    sdk: flutter
 
   # ---- ZIP 导入（.zuno 包本质是 ZIP 容器）----
   # archive 3.x 的 ZipDecoder/ZipEncoder API 稳定；解压在 Isolate 中执行避免阻塞 UI。

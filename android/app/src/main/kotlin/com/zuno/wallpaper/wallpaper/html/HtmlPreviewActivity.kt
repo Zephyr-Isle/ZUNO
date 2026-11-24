@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.ImageView
+import com.zuno.wallpaper.R
 import java.io.File
 
 /**
@@ -61,7 +62,7 @@ class HtmlPreviewActivity : Activity() {
                 shape = GradientDrawable.OVAL
                 setColor(0x66000000) // 半透明黑圆底，任何页面上可见
             }
-            contentDescription = "退出预览"
+            contentDescription = getString(R.string.zuno_exit_preview)
         }
         val closeLp = FrameLayout.LayoutParams(
             (44 * density).toInt(),

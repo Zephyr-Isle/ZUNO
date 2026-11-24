@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as lgw;
 
+import 'package:zuno/l10n/zuno_localizations.dart';
+
 /// manifest.config[] 驱动的参数编辑器。
 ///
 /// 支持四种参数类型（规格）：float（液态玻璃滑杆）、int（玻璃滑杆取整）、
@@ -31,7 +33,7 @@ class ConfigEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     if (params.isEmpty) {
       return Text(
-        '此壁纸没有可调参数',
+        ZunoLocalizations.of(context).noParameters,
         style: Theme.of(context).textTheme.bodySmall
             ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       );

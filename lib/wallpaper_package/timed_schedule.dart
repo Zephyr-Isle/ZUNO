@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:zuno/l10n/zuno_strings.dart';
+
 /// schedule.json（timed 类型）的解析模型。
 ///
 /// 格式（规格）：
@@ -81,35 +83,37 @@ class TimedScheduleParser {
     try {
       json = jsonDecode(raw);
     } catch (e) {
-      return (null, ['schedule.json 不是合法 JSON: $e']);
+      return (null, [ZunoStrings.current.errScheduleJson(e)]);
     }
-    if (json is! Map) return (null, ['schedule.json 顶层必须是对象']);
+    if (json is! Map) {
+      return (null, [ZunoStrings.current.errScheduleTopLevel]);
+    }
 
     final errors = <String>[];
     final rulesRaw = json['rules'];
     if (rulesRaw is! List) {
-      return (null, ['schedule.rules 必须是数组']);
+      return (null, [ZunoStrings.current.errScheduleRules]);
     }
     final rules = <TimedRule>[];
     for (var i = 0; i < rulesRaw.length; i++) {
       final r = rulesRaw[i];
       if (r is! Map) {
-        errors.add('rules[$i] 必须是对象');
+        errors.add(ZunoStrings.current.errRuleNotObject(i));
         continue;
       }
       final from = r['from'];
       final to = r['to'];
       final slot = r['wallpaper'];
       if (from is! String || !_hhmm.hasMatch(from)) {
-        errors.add('rules[$i].from 必须是 HH:mm，实际: $from');
+        errors.add(ZunoStrings.current.errRuleFrom(i, from));
         continue;
       }
       if (to is! String || !_hhmm.hasMatch(to)) {
-        errors.add('rules[$i].to 必须是 HH:mm，实际: $to');
+        errors.add(ZunoStrings.current.errRuleTo(i, to));
         continue;
       }
       if (slot is! String || slot.isEmpty) {
-        errors.add('rules[$i].wallpaper 必须是非空字符串');
+        errors.add(ZunoStrings.current.errRuleWallpaper(i));
         continue;
       }
       rules.add(
@@ -128,7 +132,7 @@ class TimedScheduleParser {
         : <String, dynamic>{};
     final defaultSlot = json['default'];
     if (defaultSlot != null && defaultSlot is! String) {
-      errors.add('default 必须是字符串');
+      errors.add(ZunoStrings.current.errDefaultString);
     }
     // 任何一条规则出错即整体无效（导入校验的语义：要么合法要么拒绝）。
     if (errors.isNotEmpty) return (null, errors);
